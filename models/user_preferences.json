@@ -1,0 +1,9 @@
+{
+  "active_models": {
+    "VBL": "XGBoost",
+    "CWRU": "Random Forest",
+    "MF": "MLP",
+    "CMAPSS": "Huber Regressor",
+    "MCC5": "CNN"
+  }
+}

@@ -1,0 +1,49 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.tox/
+.coverage
+
+# Backend
+backend/data/cache/
+data/processed/*.npy
+data/processed/*.pkl
+models/*.pt
+models/*.pkl
+*.db
+*.sqlite3
+
+# Environnement
+.env
+.venv
+
+# Données brutes (trop volumineuses)
+data/raw/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Fichiers temporaires
+*.tmp
+*.bak
+*.orig
+*.log

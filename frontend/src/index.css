@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ── Variables globales ─────────────────────────────────── */
+:root {
+  --bg-deep:      #0A0E1A;
+  --bg-surface:   #0F1628;
+  --bg-elevated:  #162035;
+  --bg-card:      #111827;
+
+  --border:       #1E2D4A;
+  --border-glow:  #00D4FF33;
+
+  --cyan:         #00D4FF;
+  --cyan-dim:     #00D4FF44;
+  --cyan-glow:    0 0 20px #00D4FF66, 0 0 40px #00D4FF22;
+
+  --green:        #00FF9F;
+  --green-dim:    #00FF9F33;
+  --green-glow:   0 0 20px #00FF9F66;
+
+  --orange:       #FF6B35;
+  --orange-dim:   #FF6B3533;
+
+  --amber:        #FFB800;
+  --amber-dim:    #FFB80033;
+
+  --red:          #FF3366;
+  --red-dim:      #FF336633;
+  --red-glow:     0 0 20px #FF336666;
+
+  --text:         #E8F4FD;
+  --text-muted:   #4A6FA5;
+  --text-dim:     #2A4A7A;
+
+  --font-display: 'Orbitron', monospace;
+  --font-mono:    'IBM Plex Mono', monospace;
+  --font-ui:      'DM Sans', sans-serif;
+
+  --radius:       8px;
+  --radius-lg:    16px;
+  --transition:   all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar personnalisée ────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb {
+  background: var(--cyan-dim);
+  border-radius: 2px;
+}
+
+/* ── Grille de scanning (fond animé) ───────────────────── */
+.scan-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.3;
+}
+
+.scan-grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 50% at 50% 50%,
+    transparent 40%,
+    var(--bg-deep) 100%
+  );
+}
+
+/* Ligne de scan animée */
+.scan-line {
+  position: fixed;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--cyan),
+    transparent
+  );
+  opacity: 0.15;
+  animation: scan 8s linear infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  0%   { top: -2px; }
+  100% { top: 100vh; }
+}
+
+/* ── Cards ─────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--cyan-dim),
+    transparent
+  );
+}
+
+.card:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.05);
+}
+
+/* ── Badges de statut ───────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge-green  { background: var(--green-dim);  color: var(--green);  border: 1px solid var(--green); }
+.badge-amber  { background: var(--amber-dim);  color: var(--amber);  border: 1px solid var(--amber); }
+.badge-orange { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange); }
+.badge-red    { background: var(--red-dim);    color: var(--red);    border: 1px solid var(--red);
+                animation: pulse-red 2s ease-in-out infinite; }
+.badge-cyan   { background: var(--cyan-dim);   color: var(--cyan);   border: 1px solid var(--cyan); }
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 var(--red-dim); }
+  50%       { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* ── Indicateur de valeur (metric) ──────────────────────── */
+.metric-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.metric-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Boutons ────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+.btn-primary:hover {
+  background: var(--cyan);
+  color: var(--bg-deep);
+  box-shadow: var(--cyan-glow);
+}
+
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+.btn-danger:hover {
+  background: var(--red);
+  color: var(--bg-deep);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--cyan-dim);
+}
+
+/* ── Animations communes ────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.animate-in {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+/* ── Recharts overrides ─────────────────────────────────── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--border) !important;
+}
+.recharts-text { fill: var(--text-muted) !important; }
+.recharts-tooltip-wrapper { z-index: 100; }

@@ -1,0 +1,34 @@
+name: "MCC5-THU Gearbox Dataset"
+format: "csv"
+sampling_rate: 12800
+task: "classification"
+signal_columns: ["x", "y", "z"]
+has_header: true
+label_from_folder: false
+label_from_filename: true
+filename_label_rules:
+  - pattern: "^teeth_break_and_bearing_inner"
+    label: "teeth_break_inner"
+  - pattern: "^teeth_break_and_bearing_outer"
+    label: "teeth_break_outer"
+  - pattern: "^gear_pitting"
+    label: "gear_pitting"
+  - pattern: "^gear_wear"
+    label: "gear_wear"
+  - pattern: "^teeth_break"
+    label: "teeth_break"
+  - pattern: "^teeth_crack"
+    label: "teeth_crack"
+  - pattern: "^miss_teeth"
+    label: "teeth_missing"
+  - pattern: "^health"
+    label: "normal"
+label_mapping:
+  normal:            "sain"
+  gear_pitting:      "pitting"
+  gear_wear:         "usure"
+  teeth_break:       "dent_cassee"
+  teeth_crack:       "fissure"
+  teeth_missing:     "dent_manquante"
+  teeth_break_inner: "mixte_interne"
+  teeth_break_outer: "mixte_externe"
