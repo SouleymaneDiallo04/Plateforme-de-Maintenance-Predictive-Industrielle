@@ -46,4 +46,4 @@ frontend/.env
 *.tmp
 *.bak
 *.orig
-*.log
+*.log"notebooks/data/cache/" 
