@@ -1,0 +1,13 @@
+format: csv
+label_column: res
+label_from_folder: true
+label_mapping: {}
+name: vvv
+sampling_rate: 12800.0
+signal_columns:
+- c
+- b
+- v
+- w
+- y
+task: regression

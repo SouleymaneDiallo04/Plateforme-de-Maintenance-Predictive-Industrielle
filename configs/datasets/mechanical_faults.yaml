@@ -1,0 +1,25 @@
+name: "Mechanical Faults Rotating Machinery"
+format: "mechanical_faults"
+sampling_rate: 25000
+task: "classification"
+n_channels: 4
+signal_columns:
+  - "acc_vertical_pulley"
+  - "acc_horizontal_pulley"
+  - "acc_vertical_disc"
+  - "acc_horizontal_disc"
+label_from_filename: true
+filename_label_rules:
+  - pattern: "(?i)normal"
+    label: "normal"
+  - pattern: "(?i)misalignment"
+    label: "misalignment"
+  - pattern: "(?i)unbalance"
+    label: "unbalance"
+  - pattern: "(?i)looseness"
+    label: "looseness"
+label_mapping:
+  normal:       "sain"
+  misalignment: "desalignement"
+  unbalance:    "desequilibre"
+  looseness:    "jeu_mecanique"

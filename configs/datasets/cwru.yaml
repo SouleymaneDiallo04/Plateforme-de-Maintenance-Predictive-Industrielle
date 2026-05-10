@@ -1,0 +1,43 @@
+name: CWRU Bearing Dataset
+format: mat
+sampling_rate: 12000
+task: classification
+signal_columns:
+  - DE_time
+label_from_filename: true
+label_mapping:
+  normal:                   "sain"
+  inner_race_faible:        "roulement_interne_faible"
+  inner_race_moyen:         "roulement_interne_moyen"
+  inner_race_grave:         "roulement_interne_grave"
+  ball_faible:              "roulement_bille_faible"
+  ball_moyen:               "roulement_bille_moyen"
+  ball_grave:               "roulement_bille_grave"
+  outer_race_faible:        "roulement_externe_faible"
+  outer_race_moyen:         "roulement_externe_moyen"
+  outer_race_grave:         "roulement_externe_grave"
+filename_label_rules:
+  # Outer Race (numéros les plus longs en premier)
+  - pattern: "234|235|236|237"
+    label: "outer_race_grave"
+  - pattern: "197|198|199|200"
+    label: "outer_race_moyen"
+  - pattern: "130|131|132|133"
+    label: "outer_race_faible"
+  # Inner Race
+  - pattern: "209|210|211|212"
+    label: "inner_race_grave"
+  - pattern: "169|170|171|172"
+    label: "inner_race_moyen"
+  - pattern: "105|106|107|108"
+    label: "inner_race_faible"
+  # Ball
+  - pattern: "222|223|224|225"
+    label: "ball_grave"
+  - pattern: "185|186|187|188"
+    label: "ball_moyen"
+  - pattern: "118|119|120|121"
+    label: "ball_faible"
+  # Normal (à placer en dernier pour éviter les conflits)
+  - pattern: "97|98|99|100"
+    label: "normal"

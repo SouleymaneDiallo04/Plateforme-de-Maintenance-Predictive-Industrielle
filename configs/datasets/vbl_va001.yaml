@@ -1,0 +1,17 @@
+name: VBL-VA001 Vibration Dataset
+format: csv
+sampling_rate: 20000
+signal_columns:
+  - x
+  - y
+  - z
+task: classification
+label_column: null
+label_from_filename: false
+label_from_folder: true
+#label_mapping:
+# normal:       "sain"
+#  bearing:      "roulement"
+ # misalignment: "desalignement"
+ # unbalance:    "desequilibre"
+ 
