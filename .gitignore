@@ -47,3 +47,4 @@ frontend/.env
 *.bak
 *.orig
 *.log"notebooks/data/cache/" 
+"notebooks/data/cache/*.pkl" 
