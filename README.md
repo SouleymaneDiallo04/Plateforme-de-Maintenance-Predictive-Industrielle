@@ -100,11 +100,36 @@ Le module RUL prédit le **nombre de cycles ou d'heures avant défaillance**. Ba
 ### Analyse spectrale et diagnostic pointu
 La FFT identifie les fréquences caractéristiques de défaillance : BPFO pour roulements, GMF pour engrenages, fréquences de rotation pour turbines. L'interface permet d'**importer un signal brut et d'obtenir instantanément** l'analyse, avec zones de danger, fiches techniques et recommandations Copilot — un **diagnostic au niveau d'un expert**, accessible via une interface graphique.
 
+Le moteur de diagnostic met en œuvre des techniques de référence du métier :
+
+- **Fréquences caractéristiques de roulement** — calcul de BPFO, BPFI, BSF et FTF à partir de la géométrie (nombre de billes, diamètres, angle de contact) et de la vitesse de rotation.
+- **Analyse d'enveloppe (Hilbert)** — démodulation d'une bande de résonance haute fréquence pour confirmer les défauts de roulement masqués dans le spectre brut.
+- **Détection de pics et score de proéminence** — recherche des fréquences de défaut avec tolérance, par rapport au plancher de bruit.
+- **Analyse d'ordre angulaire** — rééchantillonnage en domaine angulaire pour diagnostiquer les machines à **vitesse variable** (un défaut est repéré à un *ordre* fixe, indépendamment du régime).
+- **Cepstre et bandes latérales** — détection des familles harmoniques et des modulations d'engrenage.
+
 ### Simulation et injection de défauts
 Pour valider la détection et tester les seuils avant déploiement, PrognoSense inclut un **module de simulation complet**. Injecter synthétiquement des défauts permet de **calibrer les seuils** à la sensibilité désirée sans attendre une panne réelle.
 
 ### Flexibilité multi-datasets
 PrognoSense gère nativement **cinq datasets de référence** (VBL-VA001, CWRU, CMAPSS, MCC5-THU, Mechanical Faults) et permet aussi l'**upload et la configuration de datasets custom** via interface YAML. Ajouter un nouveau domaine prend **quelques minutes**.
+
+### Pipeline de traitement du signal
+Une chaîne unifiée absorbe l'hétérogénéité des sources :
+
+- **Adaptateur unifié** — lecture CSV / MAT / TXT / ZIP, structure commune `UnifiedSignal`.
+- **Rééchantillonnage** à 12,8 kHz et **normalisation Z-score** par canal.
+- **Fenêtrage glissant** (1024 points, recouvrement 50 %), avec **cache** (clé MD5) pour la reproductibilité.
+
+### Interface — les pages du dashboard
+- **Vue Globale** — flotte triée par criticité (jauges de santé, RUL, tendance, statut) + KPIs agrégés.
+- **Monitoring** — forme d'onde, spectre et indicateurs en temps réel, contrôles play / pause / vitesse.
+- **IA Lab** — benchmark des modèles, fiabilité & drift, SHAP, calibration, versions / rollback, ensemble d'anomalie.
+- **Pronostic & RUL** — trajectoire de dégradation et compte à rebours de durée de vie restante.
+- **Maintenance** — alertes, Copilot, diagnostic par spectre externe, événements & KPIs réels, ordres de travail, réentraînement.
+- **Audit Trail** — journal horodaté de toutes les décisions IA.
+- **Configuration** — seuils, paramètres de roulement, préférences.
+- **Connexion** — authentification sécurisée (JWT, rôles).
 
 ---
 
@@ -143,9 +168,16 @@ Couche d'**industrialisation** et de **confiance** qui rapproche PrognoSense d'u
 - **IA Lab** — onglets Versions Modèle (rollback) et Ensemble d'anomalie.
 - **Error boundary** global et **reconnexion WebSocket automatique**.
 
+### Exploitation, replay et exports
+- **Replay de signaux** réels calibrés sur les features extraites (simulation réaliste, sans matériel).
+- **Lecture agrégée (downsampling)** par tranches horaires / journalières et **politique de rétention** des données brutes.
+- **Guides techniques intégrés** — fiches des modes de défaut et interprétation des indicateurs, exposés via l'API.
+- **Export** de rapports d'intervention et du benchmark des modèles.
+
 ### Sécurité et scalabilité
 - **Authentification JWT** avec rôles (admin / utilisateur), mots de passe chiffrés (bcrypt).
-- Architecture **TimescaleDB-ready** — bascule par simple changement de `DATABASE_URL`, sans toucher au code.
+- **Validation Pydantic** de toutes les entrées de l'API.
+- Architecture **TimescaleDB-ready** — bascule par simple changement de `DATABASE_URL`, sans toucher au code ; **agrégation et rétention** prêtes pour un parc à grande échelle.
 
 ---
 
@@ -300,7 +332,24 @@ On évalue les cinq modèles sur CWRU, on compare exactitude et latence, puis on
 - **Prétraitement** — rééchantillonnage à 12,8 kHz, normalisation Z-score, fenêtrage glissant (1024 points, recouvrement 50 %).
 
 ### API et intégration
-API REST documentée (Swagger) + WebSocket, avec support CORS. Exemples :
+API REST documentée (Swagger) + WebSocket, avec support CORS, regroupant une vingtaine de domaines fonctionnels :
+
+| Domaine | Principaux points d'accès |
+|---|---|
+| Prédiction & modèles | `/predict`, `/model/select`, `/model/active/{ds}`, `/model/versions/{ds}/{m}`, `/model/rollback` |
+| Flotte & santé | `/fleet`, `/machine/{id}`, `/machine/{id}/history`, `/history/db`, `/history/rollup` |
+| Temps réel | `/ws/simulation` (WebSocket), `/simulation/units` |
+| Analyse spectrale | `/signal/indicators`, `/signal/spectrum`, `/signal/diagnose`, `/signal/iso-severity`, `/bearing/frequencies`, `/signal/order-spectrum` |
+| Ingestion & baseline | `/ingest/signal`, `/ingest/baseline/*`, `/replay/{ds}/{idx}` |
+| Anomalie | `/anomaly/ensemble/{ds}` |
+| KPIs & analytics | `/kpi/real/{id}`, `/kpi/roi/{id}`, `/analytics/prediction-accuracy/{id}`, `/analytics/false-alarm-rate` |
+| GMAO | `/workorders`, `/workorder`, `/maintenance/event` |
+| Confiance | `/drift/status`, `/audit/recent`, `/explain/shap`, `/explain/calibration/{ds}` |
+| Copilot & notifications | `/copilot/chat`, `/copilot/report/{id}`, `/notifications/test` |
+| Sécurité & MLOps | `/auth/register`, `/auth/login`, `/auth/me`, `/retrain/start`, `/retrain/demo`, `/retrain/status` |
+| Datasets & docs | `/datasets`, `/dataset/upload`, `/docs/fault-guide`, `/export/report/{id}`, `/export/benchmark` |
+
+Exemples :
 
 ```bash
 # Prédiction
