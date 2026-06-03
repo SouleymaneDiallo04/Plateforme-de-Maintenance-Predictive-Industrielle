@@ -108,6 +108,60 @@ PrognoSense gère nativement **cinq datasets de référence** (VBL-VA001, CWRU, 
 
 ---
 
+## 🚀 Nouveautés v3 — Vers une solution industrielle déployable
+
+Au-delà du diagnostic, PrognoSense intègre désormais une couche d'**industrialisation** et de **confiance** qui le rapproche d'une véritable solution de terrain, ouverte et explicable.
+
+### Connectivité industrielle (acquisition de données réelles)
+- **Ingestion universelle** (`POST /api/ingest/signal`) : tout capteur ou passerelle pousse un signal réel dans le pipeline complet (features → ISO → anomalie → diagnostic → santé → persistance).
+- **Connecteur OPC-UA** (standard de l'automatisme) et **bridge MQTT** (IIoT), activables par configuration — connectables au parc existant.
+- **Apprentissage du comportement sain propre à chaque machine** (baseline non supervisé) : l'anomalie est mesurée par rapport à *cette* machine, sans aucun historique de panne.
+
+### Diagnostic normalisé
+- **Sévérité ISO 10816 / 20816** : vitesse vibratoire en **mm/s** et **zones A/B/C/D** par classe de machine — un diagnostic comparable, normalisé et défendable.
+
+### De l'alerte à l'action (boucle fermée GMAO)
+- **Ordres de travail automatiques** créés sur état critique, **poussés vers la GMAO** (SAP PM / Maximo via webhook).
+- **Notifications par e-mail** (SMTP) sur alerte critique.
+
+### Indicateurs de fiabilité réels
+- **MTBF, MTTR, disponibilité, ROI** *mesurés* à partir des événements de maintenance saisis (et non estimés).
+- **Efficacité prédictive** : précision, rappel, *lead-time*, et **taux réel de fausses alarmes** validé par l'expert (human-in-the-loop).
+
+### Confiance & gouvernance (MLOps)
+- **Explicabilité** (SHAP), **calibration** des probabilités, **détection de dérive** (test de Kolmogorov-Smirnov).
+- **Versioning des modèles** avec **retour arrière (rollback)** en un clic.
+- **Journal d'audit** horodaté (traçabilité, esprit ISO 13373).
+- **Copilot RAG** : l'assistant cite ses **sources** (normes, guide des défauts).
+
+### Détection d'anomalie renforcée
+- **Ensemble de 3 algorithmes** (Isolation Forest + Local Outlier Factor + Elliptic Envelope) à **vote majoritaire** : une anomalie n'est confirmée que par **consensus**, ce qui réduit fortement les fausses alertes.
+- En complément de l'**auto-encodeur** (détection de défauts inconnus) et du **baseline propre à chaque machine**.
+- **Replay de signaux** calibrés sur des features réelles pour une simulation réaliste.
+
+### Nouveautés de l'interface
+- Page **Audit Trail** : journal de traçabilité horodaté de chaque décision IA et alerte.
+- Page **Maintenance** enrichie : **saisie d'événements de maintenance** (carnet de bord), panneaux **KPIs réels & ROI**, **Ordres de travail (boucle GMAO)** et **réentraînement piloté**.
+- **IA Lab** : onglets **Versions Modèle** (rollback) et **Ensemble d'anomalie**, en plus du benchmark, de la fiabilité/drift, du SHAP et de la calibration.
+- **Error boundary** global : une erreur de rendu n'interrompt plus toute l'application.
+- **Reconnexion WebSocket automatique** (back-off exponentiel) pour le temps réel.
+
+### Sécurité & passage à l'échelle
+- **Authentification JWT** avec rôles (admin / utilisateur), mots de passe chiffrés (bcrypt).
+- Architecture **TimescaleDB-ready** : bascule par simple changement de `DATABASE_URL`, sans toucher au code.
+
+### Performances réelles des modèles (benchmark sans fuite de données)
+| Dataset | Tâche | Meilleur modèle | Performance |
+|---|---|---|---|
+| VBL-VA001 | Classification (4 classes) | XGBoost | **100 %** |
+| CWRU | Classification (10 classes) | XGBoost | **97,6 %** |
+| Mechanical Faults | Classification (4 classes) | MLP | **89,6 %** |
+| CMAPSS FD001 | Régression RUL | XGBoost | **MAE 9,61 cycles · R² 0,90** |
+
+> Évaluation rigoureuse par **découpage par fichier source** (aucune fuite de données entre apprentissage et test).
+
+---
+
 ## Architecture et Infrastructure
 
 ### Conception Modulaire et Scalable
@@ -257,15 +311,23 @@ ws.onmessage = (e) => {
 **Documentation** : `http://localhost:8000/docs`  
 **Support** : GitHub Issues
 
-**Roadmap** :
-- Authentification multi-rôles RBAC
-- OPC-UA intégration (IIoT natif)
-- Clustering automatique anomalies
-- Mobile app (React Native)
-- Grafana/Prometheus export natif
-- Fine-tuning modèles via UI
+**Réalisé (v3)** :
+- ✅ Authentification multi-rôles (JWT + bcrypt)
+- ✅ Intégration OPC-UA / MQTT (IIoT natif)
+- ✅ Intégration GMAO / ERP (SAP PM, Maximo via webhook)
+- ✅ Sévérité normalisée ISO 10816/20816
+- ✅ Versioning des modèles + rollback (MLOps)
+- ✅ Réentraînement piloté depuis l'UI
+- ✅ Copilot RAG ancré sur les normes
+- ✅ Indicateurs de fiabilité réels (MTBF/MTTR/dispo/ROI) + taux de fausses alarmes
+
+**À venir** :
+- RBAC fin + SSO/LDAP, durcissement cybersécurité IEC 62443
+- Modèles physics-informed (hybrides physique + données)
+- Apprentissage fédéré multi-sites
+- Clustering automatique des anomalies
+- Mobile app (React Native), export Grafana/Prometheus
 - Multi-langue (EN/FR/العربية)
-- ERP intégration (SAP, Maximo)
 
 ---
 
