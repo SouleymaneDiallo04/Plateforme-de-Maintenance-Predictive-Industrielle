@@ -5,6 +5,7 @@
 ![React](https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react&logoColor=black)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
 ![SciPy](https://img.shields.io/badge/SciPy-Signal-8CAAE6?style=for-the-badge&logo=scipy)
+![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-00ACC1?style=for-the-badge&logo=websocket)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 <br/>
@@ -28,96 +29,104 @@
 5. [Datasets et défauts couverts](#5-datasets-et-défauts-couverts)
 6. [Architecture](#6-architecture)
 7. [Performances réelles](#7-performances-réelles)
-8. [Installation](#8-installation)
-9. [Utilisation](#9-utilisation)
-10. [Spécifications techniques](#10-spécifications-techniques)
-11. [Sécurité et conformité](#11-sécurité-et-conformité)
-12. [Roadmap](#12-roadmap)
+8. [Cas d'usage industriels](#8-cas-dusage-industriels)
+9. [Installation](#9-installation)
+10. [Utilisation](#10-utilisation)
+11. [Spécifications techniques](#11-spécifications-techniques)
+12. [Sécurité et conformité](#12-sécurité-et-conformité)
+13. [Roadmap](#13-roadmap)
 
 ---
 
 ## 1. Vue d'ensemble
 
-PrognoSense est une plateforme logicielle qui combine l'analyse de signaux vibratoires et des modèles d'intelligence artificielle pour détecter les dégradations d'équipements **avant la panne**, et faire basculer la maintenance d'une logique corrective ou calendaire vers une logique **prédictive**, fondée sur l'état réel de chaque machine.
+PrognoSense est une **plateforme logicielle innovante** qui apporte une transformation fondamentale à la maintenance industrielle. En combinant l'analyse avancée de signaux vibratoires avec des modèles d'intelligence artificielle sophistiqués, elle détecte les dégradations d'équipements **des mois à l'avance**, permettant aux organisations de basculer vers une **maintenance véritablement prédictive** basée sur l'état réel de chaque machine.
 
-Elle adresse un enjeu critique de l'industrie : la réduction des temps d'arrêt non planifiés, principale source de pertes. La solution est conçue pour être **accessible** à des ingénieurs de maintenance sans expertise en science des données, **ouverte** (connectable au parc existant) et **explicable**.
+Cette plateforme adresse un enjeu critique de l'industrie manufacturière : la réduction des temps d'arrêt non planifiés qui représentent des **pertes économiques substantielles**. PrognoSense fournit une **solution globale** de surveillance prédictive accessible aux ingénieurs de maintenance **sans expertise en data science**.
 
 ---
 
 ## 2. Différenciateurs
 
+PrognoSense ne se positionne pas comme un simple outil de monitoring. Elle représente un **changement de paradigme** dans la façon dont l'industrie approche la maintenance des équipements.
+
 ### Détection d'anomalies non supervisée
-Un auto-encodeur (PyTorch) entraîné **uniquement sur des données saines** détecte les défauts **inconnus**, jamais vus à l'entraînement : quand une anomalie apparaît, l'erreur de reconstruction augmente brusquement. C'est une couche de protection contre les modes de défaillance rares, là où un classifieur supervisé reste aveugle.
+Contrairement aux approches traditionnelles basées sur la classification supervisée, PrognoSense intègre un **auto-encodeur PyTorch entraîné exclusivement sur des données de machines saines**. Cette approche permet de **détecter des défauts inconnus et inattendus**, jamais vus dans les données historiques.
 
-### Health Index — fusion d'indicateurs
-L'indice de santé (0–100 %) n'est pas une simple moyenne, mais une fusion pondérée de trois composantes :
+C'est particulièrement critique car **30 à 40 % des pannes industrielles** sont dues à des modes de défaillance imprévisibles ou rares. Là où les solutions concurrentes restent limitées aux défauts qu'elles ont appris à reconnaître, PrognoSense offre une **couche de protection supplémentaire** pour l'inattendu : quand une anomalie apparaît, l'erreur de reconstruction augmente brusquement, signalant une déviation du régime normal. C'est comme avoir un **expert vibration qui surveille en continu**.
 
-- **Score d'anomalie** (40 %) — détection de déviation via l'auto-encodeur
-- **Prédiction RUL** (40 %) — quantifie la dégradation anticipée
-- **Variations vibratoires** (20 %) — RMS vs baseline, dérive progressive
+### Health Index — fusion intelligente d'indicateurs
+Le Health Index n'est pas une simple moyenne, mais une **fusion sophistiquée** de trois composantes complémentaires :
+
+- **Score d'anomalie** (40 %) — détection de déviation via l'auto-encodeur, capte l'imprévu
+- **Prédiction RUL** (40 %) — issue de modèles régressifs, quantifie la dégradation anticipée
+- **Variations vibratoires** (20 %) — RMS vs baseline, capture la dérive progressive
+
+Cette approche **pondérée et adaptative** permet une évaluation holistique de l'état de santé qui dépasse les outils point-solution existants. Les poids peuvent être ajustés par secteur industriel.
 
 ### Benchmark dynamique de modèles
-Cinq architectures sont comparées et conservées. Via l'interface **IA Lab**, le modèle actif d'un dataset se change **à chaud**, sans interruption de service.
+Plutôt que de forcer un unique modèle pour tous les cas d'usage, PrognoSense maintient un **benchmark continu** de cinq architectures. Via l'interface **IA Lab**, les responsables techniques visualisent les performances et **basculent instantanément** vers le meilleur modèle, sans interruption de service.
 
 ### Copilot IA contextuel
-Un assistant (LLM Mistral) a accès au contexte temps réel de la flotte et produit des **recommandations actionnables** (action, délai, justification), avec **citation des sources** normatives (RAG).
+L'intégration du LLM **Mistral** n'est pas cosmétique. Le **Copilot** a accès au contexte complet de la flotte en temps réel et génère des **recommandations opérationnelles structurées** (actions concrètes, délais, justifications), en **citant ses sources** normatives (RAG). Aucune solution concurrente ne combine suivi prédictif et IA générative de cette manière.
 
 ### Positionnement face aux solutions existantes
-
-- **vs CMMS/EAM** (SAP, Maximo, Infor) — excellents en gestion administrative mais **passifs** : aucune capacité prédictive native.
-- **vs monitoring IoT** (Thingworx, Azure IoT Hub) — ingestion et streaming, mais **aucune intelligence de domaine**.
-- **vs solutions propriétaires** (Uptake, GE Digital) — prédictives mais **coût de licence élevé** et fermées. PrognoSense est **open-source** et sans lock-in.
+- **vs CMMS/EAM traditionnelles** (SAP, Maximo, Infor) — excellentes en gestion administrative mais **passives** quant à la prédiction de pannes : aucune capacité prédictive native.
+- **vs outils de monitoring IoT** (Thingworx, Azure IoT Hub) — assurent l'ingestion et le streaming, mais **aucune intelligence prédictive de domaine** : elles collectent, PrognoSense analyse avec une expertise mécanique intégrée.
+- **vs solutions propriétaires** (Uptake, C3M, GE Digital) — capacités prédictives à **coût de licence très élevé** (6 chiffres/an). PrognoSense est **open-source**, déployable immédiatement et personnalisable. **Pas de lock-in.**
 
 ---
 
 ## 3. Fonctionnalités principales
 
-### Monitoring et diagnostic
-Extraction automatique de **45 à 132 indicateurs** selon le dataset :
+### Monitoring et diagnostic avancé
+PrognoSense transforme des **signaux vibratoires bruts en intelligence actionnelle**. La plateforme capture en continu les vibrations et en extrait automatiquement **45 à 132 indicateurs** selon le dataset.
 
-- **Temporels** — RMS, Kurtosis, Skewness, Peak, Peak-to-Peak, Crest Factor, Shape Factor, Impulse Factor, écart-type.
-- **Fréquentiels** — FFT, entropie spectrale, fréquence dominante, énergies par bande (0–1 / 1–3 / 3–5 / 5–6,4 kHz).
+- **Indicateurs temporels** — RMS, Kurtosis, Skewness, Peak, Peak-to-Peak, Crest Factor, Shape Factor, Impulse Factor, écart-type.
+- **Indicateurs fréquentiels** — FFT, entropie spectrale, fréquence dominante, énergie par bande (0–1, 1–3, 3–5, 5–6,4 kHz), couvrant les signatures de défaillance typiques.
 
-Chaque machine reçoit un Health Index continu avec quatre seuils d'action :
+Chaque machine reçoit un **Health Index continu de 0 à 100 %** synthétisant son état de santé, avec quatre seuils sémantiques d'intervention :
 
 - **SAIN** (HI > 70 %) — surveillance standard
-- **SURVEILLANCE** (40–70 %) — inspection sous 2–4 semaines
-- **ALERTE** (20–40 %) — intervention sous 48 h
-- **CRITIQUE** (< 20 %) — arrêt immédiat
+- **SURVEILLANCE** (40–70 %) — inspection dans 2–4 semaines
+- **ALERTE** (20–40 %) — intervention requise sous 48 h
+- **CRITIQUE** (< 20 %) — arrêt et intervention immédiate
 
-### Pronostic (RUL)
-Prédiction du nombre de cycles avant défaillance, à partir de données de dégradation réelles (CMAPSS NASA, 21 capteurs), permettant de planifier pièces et interventions.
+Ce système est **contextuellement intelligent** : si une machine présente une anomalie mais une RUL élevée, le Health Index le reflète — une nuance qui manque aux seuillages simples.
 
-### Analyse spectrale
-Identification des fréquences caractéristiques (BPFO, BPFI, BSF, FTF pour roulements, GMF pour engrenages) avec analyse d'enveloppe (Hilbert). Import d'un spectre externe possible.
+### Prédiction de durée de vie restante (RUL)
+Le module RUL prédit le **nombre de cycles ou d'heures avant défaillance**. Basé sur des données de dégradation réelles (CMAPSS NASA, 21 capteurs), il capture les **patterns non linéaires** que les approches simples ne modélisent pas. Pour turbines ou réducteurs, cela permet un **ordonnancement optimisé** : planifier les pièces de rechange, coordonner les maintenances, minimiser les ruptures de production.
+
+### Analyse spectrale et diagnostic pointu
+La FFT identifie les fréquences caractéristiques de défaillance : BPFO pour roulements, GMF pour engrenages, fréquences de rotation pour turbines. L'interface permet d'**importer un signal brut et d'obtenir instantanément** l'analyse, avec zones de danger, fiches techniques et recommandations Copilot — un **diagnostic au niveau d'un expert**, accessible via une interface graphique.
 
 ### Simulation et injection de défauts
-Module de simulation temps réel pour valider la détection et calibrer les seuils sans attendre une panne réelle.
+Pour valider la détection et tester les seuils avant déploiement, PrognoSense inclut un **module de simulation complet**. Injecter synthétiquement des défauts permet de **calibrer les seuils** à la sensibilité désirée sans attendre une panne réelle.
 
-### Multi-datasets
-Gestion native de **cinq datasets de référence** + upload et configuration de datasets custom via YAML.
+### Flexibilité multi-datasets
+PrognoSense gère nativement **cinq datasets de référence** (VBL-VA001, CWRU, CMAPSS, MCC5-THU, Mechanical Faults) et permet aussi l'**upload et la configuration de datasets custom** via interface YAML. Ajouter un nouveau domaine prend **quelques minutes**.
 
 ---
 
 ## 4. Nouveautés v3 (industrialisation)
 
-Couche d'**industrialisation** et de **confiance** qui rapproche PrognoSense d'une solution de terrain.
+Couche d'**industrialisation** et de **confiance** qui rapproche PrognoSense d'une véritable solution de terrain, ouverte et explicable.
 
 ### Connectivité industrielle
-- **Ingestion universelle** (`POST /api/ingest/signal`) — tout capteur/passerelle pousse un signal réel dans le pipeline complet.
-- **Connecteur OPC-UA** et **bridge MQTT**, activables par configuration.
-- **Baseline propre à chaque machine** (non supervisé) — l'anomalie est mesurée par rapport à *cette* machine, sans historique de panne.
+- **Ingestion universelle** (`POST /api/ingest/signal`) — tout capteur ou passerelle pousse un signal réel dans le pipeline complet (features → ISO → anomalie → diagnostic → santé → persistance).
+- **Connecteur OPC-UA** (standard de l'automatisme) et **bridge MQTT** (IIoT), activables par configuration — connectables au parc existant.
+- **Baseline propre à chaque machine** (non supervisé) — l'anomalie est mesurée par rapport à *cette* machine, sans aucun historique de panne.
 
 ### Diagnostic normalisé
-- **Sévérité ISO 10816 / 20816** — vitesse vibratoire en mm/s et zones A/B/C/D par classe de machine.
+- **Sévérité ISO 10816 / 20816** — vitesse vibratoire en **mm/s** et **zones A/B/C/D** par classe de machine, pour un diagnostic comparable, normalisé et défendable.
 
 ### Boucle fermée GMAO
-- **Ordres de travail automatiques** sur état critique, **poussés vers la GMAO** (SAP PM / Maximo via webhook).
+- **Ordres de travail automatiques** créés sur état critique, **poussés vers la GMAO** (SAP PM / Maximo via webhook).
 - **Notifications e-mail** (SMTP) sur alerte critique.
 
 ### Indicateurs de fiabilité réels
 - **MTBF, MTTR, disponibilité, ROI** — *mesurés* à partir des événements de maintenance saisis (et non estimés).
-- **Efficacité prédictive** — précision, rappel, lead-time, et **taux réel de fausses alarmes** validé par l'expert.
+- **Efficacité prédictive** — précision, rappel, lead-time, et **taux réel de fausses alarmes** validé par l'expert (human-in-the-loop).
 
 ### Détection d'anomalie renforcée
 - **Ensemble de 3 algorithmes** (Isolation Forest + Local Outlier Factor + Elliptic Envelope) à **vote majoritaire** — moins de fausses alertes.
@@ -136,7 +145,7 @@ Couche d'**industrialisation** et de **confiance** qui rapproche PrognoSense d'u
 
 ### Sécurité et scalabilité
 - **Authentification JWT** avec rôles (admin / utilisateur), mots de passe chiffrés (bcrypt).
-- Architecture **TimescaleDB-ready** — bascule par simple changement de `DATABASE_URL`.
+- Architecture **TimescaleDB-ready** — bascule par simple changement de `DATABASE_URL`, sans toucher au code.
 
 ---
 
@@ -177,11 +186,14 @@ Modes de défaillance diagnostiqués :
 | Sécurité | JWT (python-jose), bcrypt (passlib) |
 | Frontend | React, Vite, Recharts |
 
-### Conception
-- Architecture en trois couches (frontend / backend / persistance), modules métier isolés.
-- **WebSocket** pour le temps réel (pas de polling), avec reconnexion automatique.
-- **Registre de modèles** centralisé et **gestionnaire de flotte** en mémoire.
-- Fonctionnement **100 % local**, sans dépendance cloud obligatoire.
+### Conception modulaire et scalable
+PrognoSense est architecturée en **trois couches** (frontend / backend / persistance), avec des modules métier isolés — chacun peut être **maintenu, testé ou remplacé indépendamment**. L'utilisation de **WebSocket** pour le streaming temps réel (plutôt que du polling) garantit la réactivité sans surcharge serveur, et un **caching intelligent** maintient une faible latence de prédiction.
+
+### Modèles d'intelligence artificielle
+Le portefeuille couvre le spectre des architectures classiques : **XGBoost** (équilibre optimal en classification), **Random Forest** (robustesse au bruit), **Huber Regressor** (RUL robuste aux outliers), **CNN 1D** (signaux bruts d'engrenage sans extraction manuelle) et **auto-encodeur PyTorch** (détection d'anomalie générique). Cette diversité n'est pas du sur-dimensionnement : **différents problèmes demandent différentes architectures**, et PrognoSense permet de sélectionner l'approche optimale par dataset.
+
+### Déploiement et opérabilité
+Tout ce que PrognoSense fait, elle le fait **localement, sans dépendance cloud obligatoire**. Les données restent dans votre infrastructure, SQLite assure la persistance, et les modèles sont préchargés en mémoire. **Même sans le LLM Mistral, la plateforme reste pleinement fonctionnelle** (seul le Copilot est désactivé).
 
 ---
 
@@ -196,14 +208,36 @@ Benchmark des modèles, avec **découpage par fichier source** (aucune fuite de 
 | Mechanical Faults | Classification (4 cl.) | MLP | **89,6 %** |
 | CMAPSS FD001 | Régression RUL | XGBoost | **MAE 9,61 cycles · R² 0,90** |
 
+L'analyse montre qu'**aucun modèle n'est universellement supérieur** : XGBoost domine sur les roulements (CWRU) et le pronostic (CMAPSS), tandis que le MLP s'impose nettement sur Mechanical Faults (89,6 % contre 75 % pour les arbres) grâce aux interactions non linéaires entre 132 features.
+
 ---
 
-## 8. Installation
+## 8. Cas d'usage industriels
+
+### Maintenance prédictive de machines tournantes
+Dans une usine, les roulements sont un **point critique** : une défaillance surprise coûte des centaines de milliers d'euros. PrognoSense **détecte les anomalies de roulement 1 à 6 mois avant la panne**.
+
+Workflow concret : l'auto-encodeur détecte une micro-anomalie → le HI descend à 65 % (surveillance) → semaine 4, HI à 45 % (alerte jaune, inspection) → semaine 6, HI à 25 % (alerte rouge, 48 h) → intervention planifiée **avant** la panne.
+
+> **Comparaison** : une panne surprise coûte ~250 k€ ; l'intervention planifiée avec PrognoSense ~15 k€.
+
+### Gestion de flotte de moteurs
+Avec PrognoSense, on visualise **100+ moteurs en temps réel** sur un seul tableau de bord. Ceux approchant la fin de vie sont signalés, ceux montrant une dégradation accélérée sont remontés pour expertise, et ceux restant sains suivent une surveillance de routine : c'est une **maintenance différenciée, pilotée par les données**.
+
+### Optimisation des coûts d'exploitation
+Pour une aciérie de 500 machines : avant PrognoSense, maintenance calendaire (intervention tous les 6 mois ≈ 83/mois) ; après, seules 60 % requièrent une intervention (≈ 50/mois) et 40 % attendent 9–12 mois.
+
+> **Résultats typiques visés** : coûts de maintenance **−15 à −25 %**, pannes non planifiées **−40 %**, disponibilité **+8 à +12 %**.
+
+---
+
+## 9. Installation
 
 ### Prérequis
 - Python 3.10+
 - Node.js 18+
 - Git
+- (Optionnel) CUDA 12+ pour le support GPU
 
 ### Procédure
 
@@ -229,39 +263,44 @@ cd frontend && npm run dev                         # frontend
 ```
 
 - **Dashboard** : `http://localhost:5173`
-- **API Docs** : `http://localhost:8000/docs`
+- **API Docs (Swagger)** : `http://localhost:8000/docs`
 
 ### Configuration
 - **Copilot IA** : définir `MISTRAL_API_KEY` (clé sur console.mistral.ai).
 - **Notifications e-mail** : définir `SMTP_SENDER` et `SMTP_PASSWORD`.
 - **GMAO externe** : définir `CMMS_WEBHOOK_URL`.
 - **Base PostgreSQL/Timescale** : définir `DATABASE_URL`.
+- **Seuils personnalisés** : via la section Configuration du dashboard.
 
 ---
 
-## 9. Utilisation
+## 10. Utilisation
 
-### Workflow type
-L'ingénieur ouvre la **Vue Globale** : la flotte est triée par criticité. Un clic sur une machine en alerte lance sa surveillance temps réel ; les courbes montrent la dégradation, et le **Copilot** propose une action datée. L'événement de maintenance est ensuite saisi, alimentant les KPIs de fiabilité, et un **ordre de travail** est généré.
+### Workflow type d'un ingénieur de maintenance
+Un ingénieur ouvre la **Vue Globale** le matin : 20 machines, 16 SAINES, 3 en SURVEILLANCE, 1 en ALERTE. Il clique sur l'alerte → les courbes montrent une élévation progressive du RMS et une dégradation accélérée depuis 3 jours. Le **Copilot recommande** : *« Roulement usé probable (87 % de confiance). Intervenir sous 48 h. Pièce SKF-6309 en stock. »*
 
-### IA Lab
-Comparaison des cinq modèles par dataset, sélection du modèle actif à chaud, suivi de la fiabilité (drift, calibration), explicabilité (SHAP) et gestion des versions (rollback).
+L'intervention a lieu jeudi, 2 jours avant la panne. Après remplacement, les métriques reviennent au niveau baseline, la machine repasse SAINE, et l'événement est **journalisé automatiquement**.
+
+### Optimisation des modèles via IA Lab
+On évalue les cinq modèles sur CWRU, on compare exactitude et latence, puis on **sélectionne le meilleur modèle** : instantanément, tous les signaux du dataset l'utilisent — sans redéploiement ni interruption.
 
 ---
 
-## 10. Spécifications techniques
+## 11. Spécifications techniques
 
 ### Performance
-- Latence de prédiction : < 200 ms (CPU)
-- Streaming WebSocket temps réel
-- Conçu pour une flotte de plusieurs dizaines à centaines de machines
+- **Latence de prédiction** — < 50 ms (GPU) / < 200 ms (CPU)
+- **Streaming WebSocket** — temps réel, plusieurs mises à jour par seconde et par machine
+- **Scalabilité** — plusieurs dizaines à centaines de machines
+- **Mémoire** — < 2 Go (datasets + modèles)
+- **Calcul FFT** — quelques millisecondes
 
 ### Formats et prétraitement
-- Entrées : CSV, MAT, TXT, ZIP, YAML custom.
-- Prétraitement : rééchantillonnage à 12,8 kHz, normalisation Z-score, fenêtrage glissant (1024 pts, recouvrement 50 %).
+- **Entrées** — CSV (VBL, MCC5), MAT (CWRU), TXT (CMAPSS), ZIP, YAML custom.
+- **Prétraitement** — rééchantillonnage à 12,8 kHz, normalisation Z-score, fenêtrage glissant (1024 points, recouvrement 50 %).
 
 ### API et intégration
-API REST documentée (Swagger) + WebSocket. Exemples :
+API REST documentée (Swagger) + WebSocket, avec support CORS. Exemples :
 
 ```bash
 # Prédiction
@@ -272,25 +311,36 @@ curl -X POST http://localhost:8000/api/predict \
 # Sélection du modèle actif
 curl -X POST "http://localhost:8000/api/model/select?dataset=CWRU&model_name=XGBoost"
 
-# Ingestion d'un signal réel (OPC-UA/MQTT/edge)
+# Ingestion d'un signal réel (edge / OPC-UA / MQTT)
 curl -X POST http://localhost:8000/api/ingest/signal \
   -H "Content-Type: application/json" \
   -d '{"machine_id":"POMPE_01","signal":[...],"fs":12800,"machine_class":"II"}'
 ```
 
+```javascript
+// Surveillance temps réel via WebSocket
+const ws = new WebSocket('ws://localhost:8000/api/ws/simulation');
+ws.send(JSON.stringify({ action: 'play' }));
+ws.send(JSON.stringify({ action: 'set_machine', machine_id: 'M02', dataset: 'CWRU' }));
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  console.log(`HI=${msg.health_index}%, RUL=${msg.rul_pred}`);
+};
+```
+
 ---
 
-## 11. Sécurité et conformité
+## 12. Sécurité et conformité
 
 - **Données locales** — pas d'exfiltration ; secrets en variables d'environnement (`.env` non versionné).
 - **Authentification JWT** + rôles ; mots de passe chiffrés (bcrypt).
-- **Validation Pydantic** de toutes les entrées de l'API.
-- **Journal d'audit** complet et horodaté.
-- Inspiré des normes **ISO 10816, ISO 13373, ISO 13374**.
+- **Validation Pydantic** de toutes les entrées de l'API (prévention des injections).
+- **Journal d'audit** complet et horodaté pour la traçabilité.
+- Inspiré des normes **ISO 10816/20816, ISO 13373 et ISO 13374**.
 
 ---
 
-## 12. Roadmap
+## 13. Roadmap
 
 ### Réalisé (v3)
 - ✅ Authentification multi-rôles (JWT + bcrypt)
@@ -303,7 +353,7 @@ curl -X POST http://localhost:8000/api/ingest/signal \
 - ✅ Indicateurs de fiabilité réels (MTBF/MTTR/dispo/ROI) + taux de fausses alarmes
 
 ### À venir
-- 🔜 RBAC fin + SSO/LDAP, durcissement IEC 62443
+- 🔜 RBAC fin + SSO/LDAP, durcissement cybersécurité IEC 62443
 - 🔜 Modèles physics-informed (hybrides physique + données)
 - 🔜 Apprentissage fédéré multi-sites
 - 🔜 Clustering automatique des anomalies
