@@ -30,6 +30,10 @@ models/versions/
 
 # ───────── Données runtime ─────────
 data/audit/
+data/uploads/
+
+# ───────── Rapport (build LaTeX + figures volumineux) ─────────
+rapport/
 
 # ───────── Environnement / secrets ─────────
 .env
