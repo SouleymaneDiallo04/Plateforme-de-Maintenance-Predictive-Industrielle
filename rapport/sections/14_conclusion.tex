@@ -1,0 +1,46 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+Ce projet a abouti à \textbf{PrognoSense}, une plateforme logicielle complète de maintenance
+prédictive industrielle qui couvre, de bout en bout, la chaîne de surveillance
+conditionnelle : de l'acquisition du signal jusqu'à l'ordre de travail transmis à la GMAO,
+en passant par l'extraction d'indicateurs physiquement interprétables, le diagnostic
+spectral normalisé ISO~10816, la détection d'anomalies non supervisée, la classification
+fine des défauts et le pronostic de durée de vie restante.
+
+Sur le plan scientifique, le travail s'appuie sur une démarche rigoureuse : cinq jeux de
+données de référence couvrant un large spectre de défaillances (roulements, engrenages,
+balourd, désalignement, jeu mécanique, dégradation de turbomoteur), un benchmark méthodique
+de cinq modèles avec une évaluation \emph{sans fuite de données}, et des résultats
+significatifs --- 100\,\% sur VBL, 97{,}6\,\% sur CWRU (10 classes), 89{,}6\,\% sur
+Mechanical Faults, et un pronostic RUL à 9{,}61 cycles d'erreur moyenne ($R^2 = 0{,}90$) sur
+CMAPSS. L'analyse a montré qu'\emph{aucun modèle n'est universellement supérieur}, justifiant
+la stratégie de sélection par dataset offerte par la plateforme.
+
+Sur le plan de l'ingénierie, PrognoSense se distingue par sa couche d'\textbf{industrialisation}
+: connectivité terrain ouverte (OPC-UA, MQTT), apprentissage du comportement sain propre à
+chaque machine, indicateurs de fiabilité \emph{mesurés} (MTBF, MTTR, disponibilité, ROI),
+boucle fermée vers la GMAO, et une couche de \textbf{confiance} (explicabilité, calibration,
+détection de dérive, journal d'audit, versioning avec retour arrière, mesure réelle des
+fausses alarmes). Le copilot conversationnel, ancré sur une base de connaissances normative,
+rend cette puissance accessible en langage naturel.
+
+C'est précisément cette \textbf{intégration verticale} --- rigueur algorithmique,
+crédibilité normative, actionnabilité opérationnelle et gouvernance de confiance, le tout
+dans une architecture ouverte et scalable --- qui distingue PrognoSense des travaux centrés
+sur un seul algorithme ou un seul cas d'usage. Le projet ne se contente pas de
+\emph{prédire} : il dit \emph{quoi} tombe en panne, \emph{pourquoi} le système le pense,
+\emph{depuis quand} il le sait, et \emph{quelle action} entreprendre --- tout en restant
+vérifiable.
+
+Les limites identifiées --- validation sur données de terrain, transférabilité du pronostic,
+durcissement sécurité --- tracent une feuille de route claire vers une solution
+commercialisable. Les perspectives (modèles physics-informed, apprentissage fédéré,
+architecture OSA-CBM formelle, écosystème ouvert) confirment le potentiel de la plateforme à
+devenir une alternative crédible, ouverte et explicable aux suites propriétaires du marché.
+
+Au-delà du livrable technique, ce projet aura été l'occasion de mettre en œuvre, sur un cas
+industriel réaliste et exigeant, l'ensemble de la chaîne de valeur de la science des données
+appliquée à la fiabilité : du traitement du signal à l'apprentissage automatique, de
+l'architecture logicielle à l'expérience utilisateur, et de la performance brute à la
+confiance et à la traçabilité indispensables en milieu industriel.

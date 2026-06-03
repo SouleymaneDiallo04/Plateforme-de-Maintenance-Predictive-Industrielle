@@ -111,9 +111,30 @@ async def call_mistral(messages: list, system: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
+def build_rag_context(query: str) -> tuple:
+    """Récupère la documentation technique pertinente (normes, défauts)."""
+    try:
+        from backend.ml.rag import knowledge_base
+        docs = knowledge_base.retrieve(query, k=3)
+    except Exception:
+        docs = []
+    if not docs:
+        return "", []
+    block = "\n\n".join(
+        f"[{d['source']} — {d['title']}]\n{d['text']}" for d in docs
+    )
+    context = (
+        "\n\nDOCUMENTATION TECHNIQUE PERTINENTE "
+        "(appuie-toi dessus et cite les normes/signatures quand c'est utile) :\n"
+        + block
+    )
+    sources = [{"source": d["source"], "title": d["title"], "score": d["score"]} for d in docs]
+    return context, sources
+
+
 @router.post("/copilot/chat")
 async def chat(req: ChatRequest):
-    """Chat avec le Copilot — contexte flotte injecté automatiquement."""
+    """Chat avec le Copilot — contexte flotte + documentation (RAG) injectés."""
     # Construire le contexte machine si fourni
     user_content = req.message
     if req.machine_id:
@@ -129,15 +150,19 @@ async def chat(req: ChatRequest):
                 f"Diagnostics  : {state.get('last_diagnosis', {})}"
             )
 
+    # Documentation pertinente (RAG)
+    rag_context, sources = build_rag_context(req.message)
+
     # Construire l'historique
     messages = list(req.history or [])
     messages.append({"role": "user", "content": user_content})
 
-    reply = await call_mistral(messages, build_system_prompt())
+    reply = await call_mistral(messages, build_system_prompt() + rag_context)
 
     return {
         "reply"    : reply,
         "model"    : MISTRAL_MODEL,
+        "sources"  : sources,      # documentation citée (traçabilité de la réponse)
         "timestamp": datetime.now().isoformat(),
     }
 

@@ -10,10 +10,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, validator
 from typing import Optional, List
 import numpy as np
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import hilbert, butter, filtfilt
-from scipy.stats import kurtosis, skew
 from datetime import datetime
+
+from backend.ml.iso_severity import iso_assessment
 
 router = APIRouter(tags=["Analyse Spectrale"])
 
@@ -77,6 +76,13 @@ class DiagnoseRequest(SignalBase):
     bearing_params : Optional[BearingParams] = None
     hilbert_band_low  : float = 500.0    # Hz — configurable
     hilbert_band_high : float = 5000.0   # Hz — configurable
+    input_unit     : str = "g"           # 'g' ou 'm/s2' (pour ISO)
+    machine_class  : str = "II"          # classe ISO 10816 (I–IV)
+
+
+class ISORequest(SignalBase):
+    input_unit    : str = "g"            # 'g' ou 'm/s2'
+    machine_class : str = "II"           # classe ISO 10816 (I–IV)
 
 
 # ── Fonctions utilitaires ──────────────────────────────────────────────────
@@ -210,6 +216,7 @@ def compute_indicators(req: SignalBase):
     Léger — appelé toutes les secondes en temps réel.
     Calcule uniquement les indicateurs statistiques temporels.
     """
+    from scipy.stats import kurtosis, skew
     x   = np.array(req.signal, dtype=np.float64)
     rms = float(np.sqrt(np.mean(x**2)))
     k   = float(kurtosis(x, fisher=True))
@@ -235,6 +242,7 @@ def compute_spectrum(req: SpectrumRequest):
     Semi-temps réel — appelé toutes les 5 secondes.
     Calcule le spectre FFT et annote les fréquences caractéristiques.
     """
+    from scipy.fft import rfft, rfftfreq
     x    = np.array(req.signal, dtype=np.float64)
     N    = len(x)
     fs   = req.sampling_rate
@@ -287,6 +295,8 @@ def diagnose_signal(req: DiagnoseRequest):
     Diagnostic complet — déclenché manuellement ou quand HI < 70%.
     Combine FFT + détection pics + enveloppe Hilbert.
     """
+    from scipy.fft import rfft, rfftfreq
+    from scipy.signal import hilbert, butter, filtfilt
     x  = np.array(req.signal, dtype=np.float64)
     N  = len(x)
     fs = req.sampling_rate
@@ -400,6 +410,7 @@ def diagnose_signal(req: DiagnoseRequest):
         "envelope_analysis": envelope_analysis,
         "annotations"      : annotations,
         "char_frequencies" : char_freqs,
+        "iso_severity"     : iso_assessment(x, fs, req.input_unit, req.machine_class),
         "recommendation"   : get_recommendation(
             diagnosis['fault'], diagnosis['severity']
         ),
@@ -436,6 +447,19 @@ def diagnose_machine(machine_id: str, req: DiagnoseRequest):
 
     result["machine_id"] = machine_id
     return result
+
+
+@router.post("/signal/iso-severity")
+def signal_iso_severity(req: ISORequest):
+    """
+    Sévérité vibratoire ISO 10816/20816 — vitesse RMS (mm/s) + zone A/B/C/D.
+    Attend un signal d'ACCÉLÉRATION (g ou m/s²).
+    """
+    x = np.array(req.signal, dtype=np.float64)
+    return {
+        **iso_assessment(x, req.sampling_rate, req.input_unit, req.machine_class),
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/bearing/frequencies")

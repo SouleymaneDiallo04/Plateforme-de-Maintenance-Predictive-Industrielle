@@ -14,9 +14,7 @@ import asyncio
 import numpy as np
 import json
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
-import torch
 
 
 class ModelRegistry:
@@ -27,10 +25,16 @@ class ModelRegistry:
         self.data_dir   = Path(data_dir)
 
         # Modèles chargés en mémoire
-        self._models     = {}      # {dataset: {model_name: model_obj}}
-        self._scalers    = {}      # {dataset: scaler}
-        self._encoders   = {}      # {dataset: label_encoder}
+        self._models       = {}    # {dataset: {model_name: model_obj}}
+        self._scalers      = {}    # {dataset: scaler}
+        self._encoders     = {}    # {dataset: label_encoder}
         self._autoencoders = {}    # {dataset: AnomalyDetector}
+
+        # Détecteurs de drift (un par dataset)
+        self._drift_detectors = {}  # {dataset: DriftDetector}
+
+        # Ensembles d'anomalie (lazy, un par dataset) — None si indisponible
+        self._anomaly_ensembles = {}  # {dataset: AnomalyEnsemble | None}
 
         # Modèle actif par dataset (choix utilisateur)
         self._active_models = {}   # {dataset: model_name}
@@ -63,7 +67,7 @@ class ModelRegistry:
             self._scalers  = registry.get('scalers',  {})
             self._encoders = registry.get('encoders', {})
             self._benchmark_results = registry.get('benchmark_results', {})
-            print(f"  ✅ Benchmark registry chargé")
+            print(f"  [OK] Benchmark registry chargé")
 
         # Autoencoders
         from backend.ml.anomaly.autoencoder import AnomalyDetector
@@ -72,7 +76,7 @@ class ModelRegistry:
             if path.exists():
                 self._autoencoders[name.upper()] = \
                     AnomalyDetector.load(str(path))
-                print(f"  ✅ Autoencoder {name.upper()} chargé")
+                print(f"  [OK] Autoencoder {name.upper()} chargé")
 
         # Modèles spécialisés (MLP Mech. Faults, CNN Gear)
         mlp_path = self.models_dir / "mlp_mechanical_faults.pkl"
@@ -83,10 +87,11 @@ class ModelRegistry:
                 self._models['MF'] = {}
             self._models['MF']['MLP'] = mlp_data['model']
             self._scalers['MF_mlp']   = mlp_data['scaler']
-            print(f"  ✅ MLP Mechanical Faults chargé")
+            print(f"  [OK] MLP Mechanical Faults chargé")
 
         cnn_path = self.models_dir / "cnn_gear_mcc5.pt"
         if cnn_path.exists():
+            import torch
             from backend.ml.models.cnn_gear import GearFaultCNN
             checkpoint = torch.load(cnn_path, map_location='cpu')
             n_classes  = checkpoint['n_classes']
@@ -97,7 +102,29 @@ class ModelRegistry:
                 self._models['MCC5'] = {}
             self._models['MCC5']['CNN'] = cnn
             self._encoders['MCC5']      = checkpoint['label_encoder']
-            print(f"  ✅ CNN MCC5-THU Gearbox chargé")
+            print(f"  [OK] CNN MCC5-THU Gearbox chargé")
+
+        # Initialiser les détecteurs de drift
+        from backend.ml.drift_detector import DriftDetector
+        for ds_name in ['VBL', 'CWRU', 'MF', 'CMAPSS']:
+            self._drift_detectors[ds_name] = DriftDetector(ds_name)
+
+        # Charger les données de référence pour le drift
+        ref_files = {
+            'VBL':    'X_vbl',
+            'CWRU':   'X_cwru',
+            'MF':     'X_mf',
+            'CMAPSS': 'X_cmapss',
+        }
+        for ds_name, fname in ref_files.items():
+            ref_path = self.data_dir / f"{fname}.npy"
+            if ref_path.exists():
+                try:
+                    X_ref = np.load(ref_path)
+                    self._drift_detectors[ds_name].set_reference(X_ref)
+                    print(f"  [OK] Référence drift {ds_name} chargée ({len(X_ref)} samples)")
+                except Exception as e:
+                    print(f"  [WARN] Référence drift {ds_name} non disponible : {e}")
 
         # Charger les préférences utilisateur
         self._load_preferences()
@@ -116,7 +143,18 @@ class ModelRegistry:
 
         print(f"\nModèles actifs par défaut :")
         for ds, mn in self._active_models.items():
-            print(f"  {ds:10s} → {mn}")
+            print(f"  {ds:10s} -> {mn}")
+
+    # ── Accès direct aux objets modèles ──────────────────────────────────────
+
+    def get_model(self, dataset: str, model_name: str = None):
+        """Retourne l'objet modèle brut (pour SHAP, calibration, etc.)."""
+        model_name = model_name or self.get_active_model(dataset)
+        return self._models.get(dataset, {}).get(model_name)
+
+    def get_encoder(self, dataset: str):
+        """Retourne le LabelEncoder associé à un dataset."""
+        return self._encoders.get(dataset)
 
     # ── Sélection du modèle actif ─────────────────────────────────────────
 
@@ -169,6 +207,12 @@ class ModelRegistry:
         # Prédiction
         task = 'regression' if dataset == 'CMAPSS' else 'classification'
 
+        # Monitoring du drift en parallèle de la prédiction
+        drift_report = None
+        detector = self._drift_detectors.get(dataset)
+        if detector is not None:
+            drift_report = detector.add_production_sample(X)
+
         if task == 'classification':
             encoder     = self._encoders.get(dataset)
             y_pred_enc  = model_obj.predict(X_input)
@@ -188,6 +232,7 @@ class ModelRegistry:
                 'predictions': y_pred.tolist()
                                if hasattr(y_pred, 'tolist') else list(y_pred),
                 'confidence' : confidence,
+                'drift'      : drift_report,
                 'timestamp'  : datetime.now().isoformat()
             }
 
@@ -200,19 +245,55 @@ class ModelRegistry:
                 'dataset'    : dataset,
                 'rul_pred'   : float(y_pred.mean()),
                 'rul_std'    : float(y_pred.std()),
+                'drift'      : drift_report,
                 'timestamp'  : datetime.now().isoformat()
             }
 
+    def get_anomaly_ensemble(self, dataset: str):
+        """
+        Retourne l'ensemble d'anomalie du dataset (entraîné paresseusement sur
+        les échantillons sains). None si dataset non supporté/indisponible.
+        """
+        if dataset in self._anomaly_ensembles:
+            return self._anomaly_ensembles[dataset]
+
+        ds_key = {"VBL": "vbl", "CWRU": "cwru", "MF": "mf"}.get(dataset)
+        if not ds_key:
+            self._anomaly_ensembles[dataset] = None
+            return None
+
+        try:
+            X = np.load(self.data_dir / f"X_{ds_key}.npy")
+            with open(self.data_dir / f"y_{ds_key}.pkl", "rb") as f:
+                y = pickle.load(f)
+            y_low = np.array([str(v).lower() for v in y])
+            mask  = np.array(["sain" in v or "normal" in v for v in y_low])
+            X_norm = X[mask] if mask.any() else X
+            if len(X_norm) > 2000:
+                rng = np.random.default_rng(42)
+                X_norm = X_norm[rng.choice(len(X_norm), 2000, replace=False)]
+
+            from backend.ml.anomaly_ensemble import AnomalyEnsemble
+            ens = AnomalyEnsemble()
+            ens.fit(X_norm)
+            self._anomaly_ensembles[dataset] = ens
+            print(f"  [OK] Ensemble anomalie {dataset} entraîné ({len(X_norm)} samples)")
+        except Exception as e:
+            print(f"  [WARN] Ensemble anomalie {dataset} indisponible : {e}")
+            self._anomaly_ensembles[dataset] = None
+
+        return self._anomaly_ensembles[dataset]
+
     def predict_anomaly(self, dataset: str,
                      X: np.ndarray) -> dict:
-        """Score d'anomalie avec seuil configurable depuis la config."""
+        """Score d'anomalie : autoencoder + consensus de l'ensemble (3 algos)."""
         from backend.api.routes.config import load_config
 
         detector = self._autoencoders.get(dataset)
         if detector is None:
             return {'error': f"Autoencoder non disponible pour {dataset}"}
 
-    # Seuil dynamique depuis la configuration utilisateur
+        # Seuil dynamique depuis la configuration utilisateur
         cfg = load_config()
         dynamic_threshold = cfg.get(
             'autoencoder_thresholds', {}
@@ -220,16 +301,41 @@ class ModelRegistry:
 
         result = detector.predict(X)
 
-    # Recalculer is_anomaly avec le seuil dynamique
-    # (le score 0-100% reste inchangé)
+        # Recalculer is_anomaly avec le seuil dynamique
+        # (le score 0-100% reste inchangé)
         is_anomaly = result['anomaly_score'] > dynamic_threshold
 
-        return {
+        out = {
             'anomaly_score'   : float(result['anomaly_score'].mean()),
             'is_anomaly'      : bool(is_anomaly.any()),
             'confidence'      : float(result['confidence'].mean()),
             'threshold_used'  : dynamic_threshold,
             'timestamp'       : datetime.now().isoformat()
+        }
+
+        # Consensus de l'ensemble (3 algos) en parallèle de l'autoencoder
+        ens = self.get_anomaly_ensemble(dataset)
+        if ens is not None:
+            try:
+                er = ens.predict(X)
+                out['ensemble'] = {
+                    'consensus_score'  : er.get('consensus_score'),
+                    'is_anomaly'       : er.get('is_anomaly'),
+                    'votes'            : er.get('votes'),
+                    'individual_scores': er.get('individual_scores'),
+                }
+                # Décision renforcée : anomalie confirmée si AE ET ensemble d'accord
+                out['is_anomaly_confirmed'] = bool(out['is_anomaly'] and er.get('is_anomaly'))
+            except Exception:
+                pass
+
+        return out
+
+    def get_drift_status(self) -> dict:
+        """Retourne l'état du drift pour tous les datasets."""
+        return {
+            ds: det.get_status()
+            for ds, det in self._drift_detectors.items()
         }
 
     def get_benchmark_results(self, dataset: str = None) -> dict:
@@ -248,9 +354,8 @@ class ModelRegistry:
                             y_new: list,
                             new_label: str) -> None:
         """Réentraînement réel — modifie effectivement les modèles."""
-        import pickle, time
+        import pickle
         from sklearn.neural_network import MLPClassifier
-        from sklearn.preprocessing import LabelEncoder
 
         self._retrain_status = {
             "running"   : True,
@@ -261,66 +366,76 @@ class ModelRegistry:
         }
 
         try:
-            # ── Étape 1 : Charger le modèle existant ─────────────────────────
+            from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+            # ── Étape 1 : Charger les données existantes du dataset ──────────
             self._retrain_status.update({"progress": 10,
-                                          "message": "Chargement du modèle..."})
+                                          "message": "Chargement des données existantes..."})
             await asyncio.sleep(0.1)
 
-            existing = self._models.get(dataset, {}).get("MLP")
-            scaler   = self._scalers.get(dataset)
-
-            if scaler is not None:
-                X_scaled = scaler.transform(X_new)
-            else:
-                X_scaled = X_new
-
-            # ── Étape 2 : Déterminer les classes existantes ───────────────────
-            self._retrain_status.update({"progress": 20,
-                                          "message": "Analyse des classes..."})
-            await asyncio.sleep(0.1)
-
-            existing_classes = []
-            if existing and hasattr(existing, "classes_"):
-                existing_classes = list(existing.classes_)
-
-            all_classes = list(set(existing_classes + list(set(y_new))))
-
-            # ── Étape 3 : Réentraînement MLP avec warm_start ─────────────────
-            self._retrain_status.update({"progress": 30,
-                                          "message": f"Réentraînement MLP — "
-                                                     f"{len(X_new)} échantillons..."})
-            await asyncio.sleep(0.1)
-
-            if existing and hasattr(existing, "warm_start"):
-                # Fine-tuning : on continue l'entraînement
-                existing.warm_start = True
-                existing.max_iter   = 100
+            ds_key = {"VBL": "vbl", "CWRU": "cwru", "MF": "mf"}.get(dataset)
+            X_old, y_old = None, None
+            if ds_key:
                 try:
-                    existing.fit(X_scaled, y_new)
-                    new_mlp = existing
+                    X_old = np.load(self.data_dir / f"X_{ds_key}.npy")
+                    with open(self.data_dir / f"y_{ds_key}.pkl", "rb") as f:
+                        y_old = [str(v) for v in pickle.load(f)]
                 except Exception:
-                    # Si le nombre de classes change → réentraînement complet
-                    new_mlp = MLPClassifier(
-                        hidden_layer_sizes=(256, 128, 64),
-                        max_iter=200, random_state=42,
-                        early_stopping=True, validation_fraction=0.1
-                    )
-                    new_mlp.fit(X_scaled, y_new)
+                    X_old, y_old = None, None
+
+            # ── Étape 2 : Combiner ancien + nouveau (rééquilibrage) ──────────
+            self._retrain_status.update({"progress": 25,
+                                          "message": "Combinaison des échantillons..."})
+            await asyncio.sleep(0.1)
+
+            y_new = [str(v) for v in y_new]
+            if (X_old is not None and len(X_old) > 0
+                    and X_old.shape[1] == X_new.shape[1]):
+                rng    = np.random.default_rng(42)
+                n_keep = min(len(X_old), max(300, len(X_new) * 4))
+                idx    = rng.choice(len(X_old), n_keep, replace=False)
+                X_comb = np.vstack([X_old[idx], X_new])
+                y_comb = [y_old[i] for i in idx] + y_new
             else:
-                new_mlp = MLPClassifier(
-                    hidden_layer_sizes=(256, 128, 64),
-                    max_iter=200, random_state=42,
-                    early_stopping=True, validation_fraction=0.1
+                X_comb, y_comb = X_new, y_new
+
+            # Garde-fou : un classifieur exige au moins 2 classes
+            if len(set(y_comb)) < 2:
+                raise ValueError(
+                    "Réentraînement impossible avec une seule classe. Fournir "
+                    "aussi des exemples d'autres états, ou utiliser un dataset "
+                    "dont les données de référence sont disponibles."
                 )
-                new_mlp.fit(X_scaled, y_new)
+
+            # ── Étape 3 : Encodage + normalisation + entraînement MLP ────────
+            self._retrain_status.update({"progress": 40,
+                                          "message": f"Réentraînement MLP — "
+                                                     f"{len(X_comb)} échantillons, "
+                                                     f"{len(set(y_comb))} classes..."})
+            await asyncio.sleep(0.1)
+
+            encoder  = LabelEncoder()
+            y_enc    = encoder.fit_transform(y_comb)
+            scaler   = StandardScaler()
+            X_scaled = scaler.fit_transform(X_comb)
+
+            new_mlp = MLPClassifier(
+                hidden_layer_sizes=(256, 128, 64),
+                max_iter=200, random_state=42,
+                early_stopping=True, validation_fraction=0.1,
+            )
+            new_mlp.fit(X_scaled, y_enc)
+            all_classes = list(encoder.classes_)
 
             self._retrain_status.update({"progress": 60,
                                           "message": "Mise à jour du registry..."})
             await asyncio.sleep(0.1)
 
-            if dataset not in self._models:
-                self._models[dataset] = {}
-            self._models[dataset]["MLP"] = new_mlp
+            # Modèle + encodeur + scaler cohérents (prédictions en labels texte)
+            self._models.setdefault(dataset, {})["MLP"] = new_mlp
+            self._encoders[dataset] = encoder
+            self._scalers[dataset]  = scaler
+            self.set_active_model(dataset, "MLP")
 
             # ── Étape 4 : Mise à jour Autoencoder ────────────────────────────
             self._retrain_status.update({"progress": 75,
@@ -344,8 +459,9 @@ class ModelRegistry:
             with open(save_path, "wb") as f:
                 pickle.dump({
                     "model"    : new_mlp,
-                    "classes"  : new_mlp.classes_.tolist()
-                                 if hasattr(new_mlp, "classes_") else all_classes,
+                    "encoder"  : encoder,
+                    "scaler"   : scaler,
+                    "classes"  : [str(c) for c in all_classes],
                     "new_label": new_label,
                     "trained_at": datetime.now().isoformat(),
                 }, f)
@@ -353,7 +469,42 @@ class ModelRegistry:
             # ── Succès ────────────────────────────────────────────────────────
             test_score = None
             try:
-                test_score = float(new_mlp.score(X_scaled, y_new))
+                test_score = float(new_mlp.score(X_scaled, y_enc))
+            except Exception:
+                pass
+
+            # Versioning du modèle (best-effort, indépendant)
+            try:
+                from backend.db.models import SessionLocal
+                from backend.ml.model_versioning import version_manager
+
+                _db = SessionLocal()
+                try:
+                    version_manager.save_version(
+                        _db, new_mlp, dataset, "MLP",
+                        metrics={
+                            "accuracy" : test_score,
+                            "n_samples": len(X_comb),
+                            "n_classes": int(len(new_mlp.classes_)) if hasattr(new_mlp, "classes_") else None,
+                            "notes"    : f"Réentraînement — nouveau défaut '{new_label}'",
+                        },
+                        triggered_by="user",
+                    )
+                finally:
+                    _db.close()
+            except Exception as ve:
+                print(f"  [WARN] Versioning échoué : {ve}")
+
+            # Journal d'audit (best-effort, indépendant du versioning)
+            try:
+                from backend.ml.audit_trail import audit_trail
+                audit_trail.log_retrain(
+                    dataset      = dataset,
+                    model_name   = "MLP",
+                    n_samples    = len(X_comb),
+                    new_accuracy = test_score or 0.0,
+                    triggered_by = "user",
+                )
             except Exception:
                 pass
 
@@ -394,7 +545,7 @@ class ModelRegistry:
             with open(self._prefs_file, 'r') as f:
                 prefs = json.load(f)
             self._active_models = prefs.get('active_models', {})
-            print(f"  ✅ Préférences utilisateur chargées")
+            print(f"  [OK] Préférences utilisateur chargées")
 
 
 # Instance globale — partagée par toute l'API

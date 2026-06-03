@@ -1,0 +1,58 @@
+\chapter{Démarche de développement et gestion de projet}
+\label{chap:methodo}
+
+\section{Une approche incrémentale}
+Le projet a été conduit selon une \textbf{démarche incrémentale}, chaque incrément
+produisant une version fonctionnelle et validée avant de passer au suivant. Cette approche a
+permis de maîtriser la complexité croissante de la plateforme et de garantir, à tout moment,
+un système opérationnel. Le tableau~\ref{tab:phases} synthétise les phases successives.
+
+\begin{table}[h]
+\centering\small
+\caption{Phases de développement incrémentales.}
+\label{tab:phases}
+\begin{tabular}{>{\bfseries}p{2.0cm} p{4.2cm} p{7.0cm}}
+\toprule
+Phase & Thème & Livrables principaux \\
+\midrule
+Socle & Données et signal & Adaptateur unifié, pipeline de fenêtrage, extraction de features, préparation des cinq datasets \\
+Modélisation & Apprentissage & Benchmark des cinq modèles, sélection par dataset, auto-encodeurs, CNN engrenages \\
+Plateforme & Application & Backend FastAPI, frontend React, simulation temps réel (WebSocket), copilot \\
+Industrialisation & Crédibilité & Persistance, authentification JWT, dérive, calibration, explicabilité, audit, versioning \\
+P0 terrain & Déployabilité & Sévérité ISO 10816, ingestion universelle, baseline par machine, boucle GMAO, fausses alarmes, MQTT \\
+P1 connectivité & Passage à l'échelle & Connecteur OPC-UA, copilot RAG, architecture time-series (TimescaleDB-ready) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Validation continue}
+Chaque fonctionnalité a fait l'objet d'une \textbf{validation de bout en bout} avant
+intégration : vérification des dimensions et distributions des données, contrôle des
+métriques de benchmark, essais des routes de l'API, et tests fonctionnels des parcours
+utilisateur. Plusieurs anomalies ont ainsi été détectées et corrigées au fil de l'eau
+(chapitre~\ref{chap:defis}), notamment la fuite de données potentielle, le réentraînement
+défaillant, la concurrence d'accès à la base et la stabilité des scores d'anomalie. Cette
+discipline de validation explique la robustesse finale de la plateforme.
+
+\section{Outils et environnement}
+Le développement s'est appuyé sur un environnement Python isolé (environnement virtuel), une
+gestion de version Git, et une organisation modulaire du code séparant clairement les
+responsabilités : adaptateur de données, extraction de features, modèles, registre, routes
+API, et interface. Les notebooks d'expérimentation (préparation des datasets, benchmark,
+auto-encodeurs) sont conservés séparément du code de production, garantissant la traçabilité
+des résultats et la reproductibilité des entraînements.
+
+\section{Principes de qualité retenus}
+Trois principes ont guidé l'ensemble du développement :
+\begin{description}[leftmargin=1.5em, style=nextline]
+  \item[Honnêteté des résultats.] Aucun chiffre n'est fabriqué : les performances sont
+        mesurées sans fuite de données, et les indicateurs de fiabilité ne s'affichent qu'en
+        présence de données réelles.
+  \item[Robustesse avant fonctionnalité.] Une fonctionnalité n'est considérée comme acquise
+        qu'une fois éprouvée face aux cas dégradés (données imparfaites, concurrence,
+        erreurs).
+  \item[Traçabilité.] Toute décision de l'IA est journalisée, tout modèle est versionné, et
+        toute alerte peut être expliquée.
+\end{description}
+Ces principes, au-delà de leur intérêt académique, sont précisément ceux qu'exige un
+déploiement industriel réel.

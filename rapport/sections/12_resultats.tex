@@ -1,0 +1,92 @@
+\chapter{Résultats, interprétation et différenciation}
+\label{chap:resultats}
+
+\section{Synthèse des résultats quantitatifs}
+Le tableau~\ref{tab:synth} consolide les performances atteintes. Sur le plan du diagnostic,
+la plateforme atteint ou dépasse les seuils industriels usuels (exactitude $>$ 95\,\% sur les
+cas de roulement, $R^2 = 0{,}90$ sur le pronostic).
+
+\begin{table}[h]
+\centering\small
+\caption{Synthèse des résultats par tâche et dataset.}
+\label{tab:synth}
+\begin{tabular}{>{\bfseries}l l l l}
+\toprule
+Tâche & Dataset & Meilleur modèle & Performance \\
+\midrule
+Classification & VBL-VA001 & XGBoost & 100{,}0\,\% (4 classes) \\
+Classification & CWRU & XGBoost & 97{,}6\,\% (10 classes) \\
+Classification & Mechanical Faults & MLP & 89{,}6\,\% (4 classes) \\
+Classification & MCC5-THU & CNN 1D & 8 classes d'engrenage \\
+Régression RUL & CMAPSS FD001 & XGBoost & MAE 9{,}61 ; $R^2$ 0{,}90 \\
+Anomalie (non sup.) & tous & Auto-encodeur + ensemble & seuil P95, vote 2/3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Interprétation physique et industrielle}
+Les résultats ne sont pas que des chiffres : ils ont un sens mécanique.
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Roulements (CWRU).} L'exactitude de 97{,}6\,\% sur 10 classes signifie que la
+        plateforme distingue non seulement \emph{où} se situe le défaut (bague interne,
+        externe, bille) mais aussi son \emph{intensité}. Les rares confusions concernent des
+        sévérités voisines d'un même défaut, ce qui est sans conséquence sur la décision de
+        maintenance (le même roulement sera remplacé).
+  \item \textbf{Machine tournante (Mechanical Faults).} Le diagnostic à 89{,}6\,\% des
+        balourds, désalignements et jeux mécaniques couvre les trois défauts les plus
+        fréquents des machines tournantes, validant l'utilité opérationnelle.
+  \item \textbf{Pronostic (CMAPSS).} Une erreur moyenne de 9{,}6 cycles permet de planifier
+        une intervention avec une marge confortable. Le bon score NASA (12\,249) confirme que
+        le modèle évite les sur-estimations dangereuses qui repousseraient à tort
+        l'intervention.
+  \item \textbf{Anomalie.} La détection non supervisée ajoute un filet de sécurité contre les
+        modes de défaillance \emph{inconnus}, absents de tout entraînement supervisé.
+\end{itemize}
+
+\section{Capacités validées de bout en bout}
+Au-delà des modèles, les fonctionnalités d'industrialisation ont été validées
+opérationnellement (tableau~\ref{tab:valid}).
+
+\begin{table}[h]
+\centering\small
+\caption{Validations fonctionnelles de bout en bout.}
+\label{tab:valid}
+\begin{tabular}{>{\bfseries}p{4.4cm} p{9.2cm}}
+\toprule
+Fonctionnalité & Résultat de validation \\
+\midrule
+Sévérité ISO 10816 & Essai 1\,g/50\,Hz $\rightarrow$ 22{,}3\,mm/s, zone D (conforme au calcul théorique) \\
+Baseline par machine & Signal sain $\rightarrow$ anomalie $\approx 5\,\%$ ; dégradé $\rightarrow \approx 96\,\%$ \\
+Ingestion + GMAO & Signal critique ingéré $\rightarrow$ ordre de travail P1 créé automatiquement \\
+Connecteur OPC-UA & Serveur de démo $\rightarrow$ machine ingérée (états + baseline) \\
+Copilot RAG & \og pic à 2$\times$ \fg{} $\rightarrow$ \og désalignement \fg, sources citées \\
+KPIs réels & MTBF/MTTR/disponibilité calculés depuis les interventions saisies \\
+Lecture agrégée & Centaines de points bruts $\rightarrow$ tranches horaires (downsampling) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Apports et différenciation}
+La valeur de PrognoSense ne réside pas dans un record ponctuel de précision, mais dans la
+\textbf{combinaison cohérente} d'éléments rarement réunis dans un même projet :
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Amplitude fonctionnelle.} Une seule plateforme couvre quatre natures de
+        machines, cinq familles de défauts (cf. tableau~\ref{tab:fautes}), et trois tâches
+        d'apprentissage (classification, régression, détection non supervisée).
+  \item \textbf{Rigueur scientifique.} Évaluation sans fuite de données, métriques adaptées
+        (score NASA asymétrique), indicateurs de fiabilité \emph{mesurés} et non inventés.
+  \item \textbf{Crédibilité normative.} Diagnostic exprimé en zones ISO~10816, architecture
+        inspirée d'OSA-CBM (ISO~13374).
+  \item \textbf{Actionnabilité.} Boucle fermée de l'alerte vers l'ordre de travail et la
+        GMAO --- ce que la plupart des prototypes académiques ne font pas.
+  \item \textbf{Confiance et gouvernance.} Explicabilité, calibration, dérive, audit,
+        versioning avec rollback, et mesure réelle du taux de fausses alarmes.
+  \item \textbf{Ouverture et connectivité.} Ingestion vendor-agnostic, OPC-UA et MQTT,
+        absence de verrouillage propriétaire.
+  \item \textbf{Accessibilité.} Copilot ancré sur les normes, rendant l'expertise vibratoire
+        accessible en langage naturel.
+\end{enumerate}
+C'est cette \emph{intégration verticale complète} --- du capteur jusqu'à l'ordre de travail,
+en passant par le diagnostic normalisé, le pronostic et la gouvernance --- qui démarque
+PrognoSense des travaux centrés sur un unique algorithme ou un unique dataset, et qui le
+rapproche d'une véritable solution industrielle.

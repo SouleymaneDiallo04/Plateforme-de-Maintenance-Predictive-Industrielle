@@ -8,6 +8,7 @@ import yaml
 import pickle
 import hashlib
 import zipfile
+# pyrefly: ignore [missing-import]
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -17,7 +18,10 @@ from scipy.signal import resample_poly
 from math import gcd
 import io
 
-# ── Constantes globales ─────────────────────────────────────────────────────
+# ── Constantes globales ──────────────────────────────
+# 
+# 
+# ───────────────────────
 TARGET_FS   = 12_800   # Hz (fréquence cible pour tous les signaux temporels)
 WINDOW_SIZE = 1_024    # points par fenêtre
 HOP_SIZE    = 512      # chevauchement 50 %

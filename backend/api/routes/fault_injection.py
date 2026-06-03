@@ -1,10 +1,11 @@
 """Injection de défauts simulés avec gestion de durée."""
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional
 import numpy as np
 import asyncio
+from backend.api.auth import require_admin
 
 router = APIRouter(tags=["Injection de défauts"])
 
@@ -23,7 +24,7 @@ class InjectionRequest(BaseModel):
     duration   : int = 50   # nombre de cycles avant arrêt automatique
 
 
-@router.post("/inject/fault")
+@router.post("/inject/fault", dependencies=[Depends(require_admin)])
 def inject_fault(req: InjectionRequest,
                   background_tasks: BackgroundTasks):
     """Injecte un défaut simulé pour N cycles."""
@@ -51,7 +52,7 @@ def inject_fault(req: InjectionRequest,
     }
 
 
-@router.post("/inject/stop")
+@router.post("/inject/stop", dependencies=[Depends(require_admin)])
 def stop_injection():
     _injection_state.update({
         "active"          : False,

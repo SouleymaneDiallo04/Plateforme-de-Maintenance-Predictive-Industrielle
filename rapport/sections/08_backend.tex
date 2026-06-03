@@ -1,0 +1,77 @@
+\chapter{Architecture backend (FastAPI)}
+\label{chap:backend}
+
+\section{Organisation}
+Le backend est structuré en \textbf{routeurs spécialisés} (un par domaine fonctionnel),
+montés sous le préfixe \texttt{/api}. Au démarrage, l'application initialise la base de
+données, charge l'ensemble des modèles via le \texttt{ModelRegistry}, instancie la flotte
+de démonstration et active les connecteurs industriels éventuels. Le
+tableau~\ref{tab:routes} recense les principaux groupes de routes.
+
+\begin{table}[h]
+\centering\small
+\caption{Principaux groupes de routes de l'API.}
+\label{tab:routes}
+\begin{tabular}{>{\bfseries}l p{9.5cm}}
+\toprule
+Domaine & Routes principales \\
+\midrule
+Prédiction & \texttt{/predict}, \texttt{/model/select}, \texttt{/model/active/\{ds\}},
+             \texttt{/model/versions/\{ds\}/\{m\}}, \texttt{/model/rollback} \\
+Flotte / santé & \texttt{/fleet}, \texttt{/machine/\{id\}}, \texttt{/machine/\{id\}/history} \\
+Simulation & \texttt{/ws/simulation} (WebSocket), \texttt{/simulation/units} \\
+Analyse spectrale & \texttt{/signal/indicators}, \texttt{/signal/spectrum},
+             \texttt{/signal/diagnose}, \texttt{/signal/iso-severity}, \texttt{/bearing/frequencies} \\
+Ingestion & \texttt{/ingest/signal}, \texttt{/ingest/baseline/\{finalize,reset,status\}}, \texttt{/replay/\{ds\}/\{idx\}} \\
+Anomalie & \texttt{/anomaly/ensemble/\{ds\}}, \texttt{/anomaly/ensemble/demo/\{ds\}} \\
+KPIs / analytics & \texttt{/kpi/real/\{id\}}, \texttt{/kpi/roi/\{id\}},
+             \texttt{/analytics/prediction-accuracy/\{id\}}, \texttt{/analytics/false-alarm-rate} \\
+GMAO & \texttt{/workorder(s)}, \texttt{/maintenance/event} \\
+Confiance & \texttt{/drift/status}, \texttt{/audit/recent}, \texttt{/explain/shap},
+             \texttt{/explain/calibration/\{ds\}} \\
+Copilot & \texttt{/copilot/chat}, \texttt{/copilot/report/\{id\}} \\
+Sécurité & \texttt{/auth/register}, \texttt{/auth/login}, \texttt{/auth/me} \\
+Retrain & \texttt{/retrain/start}, \texttt{/retrain/demo}, \texttt{/retrain/status} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Le registre de modèles}
+Le \texttt{ModelRegistry} est la pièce maîtresse du backend. Il centralise le chargement
+(registre benchmark, auto-encodeurs, CNN, MLP spécialisés), la gestion du modèle actif par
+dataset (persistée en JSON), l'inférence unifiée, le réentraînement asynchrone et le
+versioning. L'interface de prédiction unifiée applique systématiquement la même logique :
+sélection du modèle actif (ou imposé), normalisation conditionnelle des entrées (uniquement
+pour le MLP et le Huber, sensibles à l'échelle), exécution du monitoring de dérive en
+parallèle, puis production d'un résultat au format homogène. Pour une tâche de régression
+(CMAPSS), la sortie est la RUL moyenne plafonnée à 125 cycles ; pour une tâche de
+classification, elle comprend le label décodé (via le \emph{LabelEncoder} du dataset) et un
+niveau de confiance dérivé des probabilités. Ce format uniforme, indépendant du modèle
+sous-jacent, simplifie la consommation côté client et l'intégration de nouveaux modèles.
+
+\section{La simulation temps réel}
+Le c\oe ur dynamique de la plateforme est le WebSocket de simulation. À chaque cycle, pour
+la machine surveillée, le serveur : (i) sélectionne la fenêtre de données réelle suivante,
+(ii) exécute la prédiction supervisée et le score d'anomalie, (iii) calcule l'indice de
+santé lissé, (iv) reconstruit un signal exploitable pour l'affichage spectral, (v) met à
+jour le \texttt{HealthTracker} (historique, tendance, alertes) et (vi) diffuse un message
+JSON complet. Toutes les cinq itérations, l'événement est consigné dans le journal d'audit
+et persisté en base. Un \texttt{ConnectionManager} isole l'état de chaque client (machine,
+dataset, vitesse), permettant la surveillance simultanée de plusieurs machines.
+
+\section{Sécurité et persistance}
+L'\textbf{authentification} repose sur des jetons \textbf{JWT} signés (HS256, expiration
+configurable) et des mots de passe hachés en \textbf{bcrypt}. Deux rôles sont gérés :
+\texttt{admin} (réentraînement, injection de défauts, rollback) et \texttt{user}
+(consultation). La \textbf{persistance} s'appuie sur SQLAlchemy : les modèles
+\texttt{MachineState}, \texttt{Alert}, \texttt{DiagnosticLog}, \texttt{ModelMetadata},
+\texttt{User}, \texttt{MaintenanceEvent}, \texttt{ModelVersion}, \texttt{WorkOrder} et
+\texttt{AlertVerdict} couvrent l'ensemble du domaine. Le mode \textbf{WAL} de SQLite autorise
+lectures et écriture concurrentes, indispensable à la coexistence de la boucle de simulation,
+des écritures d'événements et du versioning.
+
+\section{Validation des entrées}
+Toutes les entrées sont validées par des schémas \textbf{Pydantic} (longueur minimale de
+signal, positivité des fréquences, géométrie de roulement cohérente), ce qui sécurise l'API
+contre les données malformées et documente automatiquement le contrat d'interface via
+Swagger (\texttt{/docs}).

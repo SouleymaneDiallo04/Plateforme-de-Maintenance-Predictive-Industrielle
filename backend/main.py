@@ -11,10 +11,14 @@ from backend.api.routes import (
     predict, benchmark, health, simulation,
     retrain, dataset, alerts, spectral,
     kpi, fault_injection, config, copilot,
-    notifications, export, docs_tech
+    notifications, export, docs_tech, explainability,
+    kpi_real, analytics, anomaly, ingest, workorders
 )
+from backend.api.routes.auth_routes import router as auth_router
 from backend.ml.model_registry import registry
 from backend.ml.health_tracker import fleet_manager
+from backend.ml.audit_trail import audit_trail
+from backend.db.models import init_db
 
 app = FastAPI(
     title       = "PrognoSense API",
@@ -27,6 +31,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins     = ["http://localhost:5173",
+                         "http://localhost:5174",
+                         "http://localhost:5175",
                          "http://localhost:3000"],
     allow_credentials = True,
     allow_methods     = ["*"],
@@ -36,10 +42,19 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     print("=" * 50)
-    print("  PrognoSense API v1.0 — Démarrage")
+    print("  PrognoSense API v1.0 - Demarrage")
     print("=" * 50)
 
+    # Initialise la base SQLite (crée les tables si absentes)
+    init_db()
+    print("  [OK] Base de donnees initialisee")
+
     registry.load_all()
+
+    # Charger les datasets pour le replay de signaux réels
+    from backend.ml.signal_replayer import replayer
+    for ds in ["cmapss", "vbl", "cwru", "mf"]:
+        replayer.load_dataset(ds)
 
     # Flotte de démo
     demo_machines = [
@@ -54,8 +69,14 @@ async def startup():
     for mid, ds in demo_machines:
         fleet_manager.add_machine(mid, ds)
 
-    print(f"\n  Flotte : {len(fleet_manager._machines)} machines initialisées")
-    print("  API prête — http://localhost:8000/docs\n")
+    # Bridges IIoT (s'activent seulement si configurés)
+    from backend.api.mqtt_bridge import start_mqtt_bridge
+    start_mqtt_bridge()
+    from backend.api.opcua_bridge import start_opcua_bridge
+    start_opcua_bridge()
+
+    print(f"\n  Flotte : {len(fleet_manager._machines)} machines initialisees")
+    print("  API prete -- http://localhost:8000/docs\n")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
@@ -73,21 +94,119 @@ app.include_router(config.router,         prefix="/api")
 app.include_router(copilot.router,        prefix="/api")
 app.include_router(notifications.router,  prefix="/api")
 app.include_router(export.router,         prefix="/api")
-app.include_router(docs_tech.router,      prefix="/api")
+app.include_router(docs_tech.router,        prefix="/api")
+app.include_router(explainability.router,  prefix="/api")
+app.include_router(kpi_real.router,         prefix="/api")
+app.include_router(analytics.router,        prefix="/api")
+app.include_router(anomaly.router,          prefix="/api")
+app.include_router(ingest.router,           prefix="/api")
+app.include_router(workorders.router,       prefix="/api")
+app.include_router(auth_router,            prefix="/api")
+
+
+# ── Routes système (drift, audit, fiabilité modèle) ───────────────────────
+
+@app.get("/api/drift/status")
+def drift_status():
+    """Score de dérive par dataset (concept drift KS-test)."""
+    return registry.get_drift_status()
+
+
+@app.get("/api/audit/recent")
+def audit_recent(n: int = 100, machine_id: str = None):
+    """Journal de traçabilité des N dernières décisions IA."""
+    return {
+        "entries": audit_trail.get_recent(n, machine_id),
+        "stats"  : audit_trail.get_stats(),
+    }
+
+
+@app.get("/api/audit/stats")
+def audit_stats():
+    """Statistiques globales de l'audit trail."""
+    return audit_trail.get_stats()
+
+
+@app.get("/api/model/reliability/{dataset}")
+def model_reliability(dataset: str):
+    """État de fiabilité complet d'un dataset (drift + modèle actif)."""
+    drift = registry.get_drift_status().get(dataset, {})
+    return {
+        "dataset"     : dataset,
+        "drift"       : drift,
+        "active_model": registry.get_active_model(dataset),
+        "note"        : "Calibration Platt disponible via POST /api/explain/reliability",
+    }
+
+
+@app.post("/api/signal/order-spectrum")
+def order_spectrum(payload: dict):
+    """
+    Analyse d'ordre — rééchantillonnage angulaire du signal.
+    Détecte les défauts indépendamment de la vitesse de rotation.
+
+    Body: { "signal": [...], "fs": 12800, "rpm_mean": 1750,
+            "rpm_signal": [...] (optionnel), "max_order": 20 }
+    """
+    from backend.ml.order_tracking import (
+        compute_order_spectrum, extract_order_energy,
+        compute_kinematic_orders
+    )
+    import numpy as np
+    from backend.api.routes.config import load_config
+
+    signal  = np.array(payload.get("signal", []), dtype=np.float64)
+    if len(signal) == 0:
+        return {"error": "Signal vide"}
+
+    fs       = float(payload.get("fs", 12800.0))
+    rpm_mean = float(payload.get("rpm_mean", 1750.0))
+    rpm_sig  = payload.get("rpm_signal")
+    rpm_arr  = np.array(rpm_sig, dtype=np.float64) if rpm_sig else None
+
+    spectrum = compute_order_spectrum(
+        signal=signal, rpm_signal=rpm_arr,
+        fs=fs, rpm_mean=rpm_mean,
+        max_order=float(payload.get("max_order", 20.0)),
+    )
+
+    # Ordres cinématiques depuis la config
+    cfg    = load_config()
+    bp     = cfg.get("bearing_params", {})
+    orders = compute_kinematic_orders(
+        shaft_freq    = bp.get("shaft_freq", 20.6),
+        n_balls       = int(bp.get("n_balls", 9)),
+        ball_diam     = bp.get("ball_diam", 7.94),
+        pitch_diam    = bp.get("pitch_diam", 38.5),
+        contact_angle = bp.get("contact_angle", 0.0),
+    )
+
+    # Énergie aux ordres défauts
+    energies = {
+        name: extract_order_energy(spectrum, order_val)
+        for name, order_val in orders.items()
+    }
+
+    return {**spectrum, "kinematic_orders": orders, "order_energies": energies}
+
 
 @app.get("/")
 def root():
     return {
         "name"    : "PrognoSense API",
-        "version" : "1.0.0",
+        "version" : "2.0.0",
         "status"  : "running",
         "docs"    : "/docs",
         "endpoints": {
-            "predict"    : "/api/predict",
-            "fleet"      : "/api/fleet",
-            "benchmark"  : "/api/benchmark",
-            "copilot"    : "/api/copilot/chat",
-            "simulation" : "ws://localhost:8000/ws/simulation",
+            "predict"        : "/api/predict",
+            "fleet"          : "/api/fleet",
+            "benchmark"      : "/api/benchmark",
+            "copilot"        : "/api/copilot/chat",
+            "simulation"     : "ws://localhost:8000/api/ws/simulation",
+            "drift"          : "/api/drift/status",
+            "audit"          : "/api/audit/recent",
+            "explainability" : "/api/explain/shap",
+            "reliability"    : "/api/model/reliability/{dataset}",
         }
     }
 

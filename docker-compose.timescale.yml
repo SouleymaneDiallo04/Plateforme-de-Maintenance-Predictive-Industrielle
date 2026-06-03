@@ -1,0 +1,28 @@
+# TimescaleDB — base time-series scalable pour PrognoSense.
+# Lancer :  docker compose -f docker-compose.timescale.yml up -d
+# Puis pointer l'app dessus :
+#   DATABASE_URL=postgresql://prognosense:prognosense@localhost:5432/prognosense
+#
+# TimescaleDB = PostgreSQL + extension time-series (hypertables, time_bucket,
+# compression, rétention automatique). L'application n'a RIEN à changer dans son
+# code : seul DATABASE_URL change (l'ORM SQLAlchemy reste identique).
+
+version: "3.8"
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: prognosense-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prognosense
+      POSTGRES_PASSWORD: prognosense
+      POSTGRES_DB: prognosense
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./docs/timescale_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+volumes:
+  timescale_data:

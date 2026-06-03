@@ -1,50 +1,68 @@
-# Python
+# ───────── Python ─────────
 venv/
+.venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
 pip-log.txt
 pip-delete-this-directory.txt
 .pytest_cache/
 .tox/
 .coverage
 
-# Backend
-backend/data/cache/
+# ───────── Données & modèles volumineux ─────────
 data/processed/*.npy
 data/processed/*.pkl
+data/raw/
+backend/data/cache/
+notebooks/data/cache/
 models/*.pt
 models/*.pkl
+models/baselines/
+models/versions/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 
-# Environnement
+# ───────── Données runtime ─────────
+data/audit/
+
+# ───────── Environnement / secrets ─────────
 .env
-.venv
+.env.*
 
-# Données brutes (trop volumineuses)
-data/raw/
-
-# Frontend
+# ───────── Frontend ─────────
 frontend/node_modules/
 frontend/build/
 frontend/dist/
 frontend/.env
 
-# IDE
+# ───────── IDE / agent ─────────
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
 .DS_Store
 
-# Fichiers temporaires
+# ───────── Logs & temporaires ─────────
+*.log
+*.log.err
 *.tmp
 *.bak
 *.orig
-*.log"notebooks/data/cache/" 
-"notebooks/data/cache/*.pkl" 
+
+# ───────── LaTeX (intermédiaires de compilation) ─────────
+*.aux
+*.toc
+*.lof
+*.lot
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz

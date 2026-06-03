@@ -1,0 +1,211 @@
+\chapter{Modèles d'apprentissage et benchmark}
+\label{chap:bench}
+
+\section{Modèles évalués}
+Cinq familles de modèles ont été retenues, choisies pour couvrir le spectre des approches
+classiques et offrir un compromis entre performance, rapidité et interprétabilité
+(tableau~\ref{tab:hyper}).
+
+\begin{table}[h]
+\centering\small
+\caption{Modèles et principaux hyperparamètres.}
+\label{tab:hyper}
+\begin{tabular}{>{\bfseries}l p{6.2cm} p{4.2cm}}
+\toprule
+Modèle & Hyperparamètres & Rôle \\
+\midrule
+Decision Tree & \texttt{max\_depth=15} (classif.), \texttt{=10} (régr.) & Référence interprétable \\
+Random Forest & \texttt{n\_estimators=200}, \texttt{class\_weight=balanced} & Robustesse au bruit \\
+XGBoost & \texttt{n\_estimators=300}, \texttt{max\_depth=6}, \texttt{lr=0.05} & Performance maximale \\
+MLP & couches \texttt{(256,128,64)}, \texttt{early\_stopping} & Frontières non linéaires \\
+Huber Regressor & \texttt{max\_iter=300} & Régression RUL robuste aux \emph{outliers} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Méthodologie d'évaluation}
+La rigueur de l'évaluation est un point critique souvent négligé. Deux précautions ont été
+prises :
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Découpage par fichier source} (\texttt{split\_by\_source}) : les fenêtres
+        issues d'un même enregistrement ne sont jamais réparties entre apprentissage et
+        test. Cela \textbf{interdit toute fuite de données} (\emph{data leakage}) qui
+        gonflerait artificiellement les scores. Pour CWRU (10 classes, 40 fichiers), la
+        taille de test a été automatiquement portée de 20\,\% à 25\,\% pour garantir au
+        moins un fichier par classe en test.
+  \item \textbf{Normalisation conditionnelle} : seuls les modèles sensibles à l'échelle
+        (MLP, Huber) reçoivent des données standardisées ; les modèles à base d'arbres
+        opèrent sur les features brutes.
+\end{itemize}
+Pour la régression RUL, le découpage se fait \emph{par moteur} (80 moteurs en apprentissage,
+20 en test, sur les 100 de CMAPSS). La métrique officielle \textbf{NASA} est utilisée en
+complément du MAE/RMSE ; elle pénalise asymétriquement les sur-estimations de RUL (plus
+dangereuses, car elles repoussent à tort l'intervention) :
+\begin{equation}
+S = \sum_i
+\begin{cases}
+e^{-\Delta_i/13} - 1 & \text{si } \Delta_i < 0 \ (\text{sous-estimation})\\
+e^{\Delta_i/10} - 1 & \text{si } \Delta_i \ge 0 \ (\text{sur-estimation})
+\end{cases},\quad \Delta_i = \hat{y}_i - y_i
+\end{equation}
+
+\section{Résultats de classification}
+Le tableau~\ref{tab:classif} présente les résultats réels obtenus sur les trois datasets de
+classification. La figure~\ref{fig:bench} en donne une vue graphique consolidée.
+
+\begin{table}[h]
+\centering\small
+\caption{Benchmark classification --- résultats réels.}
+\label{tab:classif}
+\begin{tabular}{l l c c c c}
+\toprule
+Dataset & Modèle & Accuracy (\%) & F1-score & Train (s) & Inférence (ms) \\
+\midrule
+\multirow{4}{*}{VBL-VA001}
+ & Decision Tree & 100{,}00 & 1{,}000 & 0{,}0 & 0{,}008 \\
+ & Random Forest & 100{,}00 & 1{,}000 & 1{,}4 & 2{,}143 \\
+ & \textbf{XGBoost} & \textbf{100{,}00} & \textbf{1{,}000} & 1{,}5 & 0{,}060 \\
+ & MLP & 100{,}00 & 1{,}000 & 0{,}4 & 0{,}019 \\
+\midrule
+\multirow{4}{*}{CWRU}
+ & Decision Tree & 93{,}93 & 0{,}930 & 0{,}3 & 0{,}001 \\
+ & Random Forest & 97{,}38 & 0{,}972 & 1{,}9 & 0{,}052 \\
+ & \textbf{XGBoost} & \textbf{97{,}59} & \textbf{0{,}975} & 8{,}4 & 0{,}087 \\
+ & MLP & 93{,}50 & 0{,}926 & 14{,}3 & 0{,}007 \\
+\midrule
+\multirow{4}{*}{Mechanical Faults}
+ & Decision Tree & 50{,}89 & 0{,}424 & 9{,}0 & 0{,}000 \\
+ & Random Forest & 75{,}07 & 0{,}669 & 14{,}9 & 0{,}027 \\
+ & XGBoost & 75{,}31 & 0{,}674 & 52{,}9 & 0{,}026 \\
+ & \textbf{MLP} & \textbf{89{,}64} & \textbf{0{,}896} & 16{,}2 & 0{,}008 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{benchmark_complet.png}
+\caption{Synthèse du benchmark des cinq modèles (accuracy en classification, MAE et
+$R^2$ en régression RUL).}
+\label{fig:bench}
+\end{figure}
+
+\subsection{Analyse par dataset}
+\textbf{VBL-VA001 (100\,\%).} Les quatre modèles atteignent l'exactitude parfaite. Ce
+résultat, loin d'être anodin, valide le pipeline de bout en bout : sur un cas où les classes
+sont nettement séparables, aucune erreur n'est introduite par le traitement. Le découpage
+par fichier source garantit qu'il ne s'agit pas de sur-apprentissage.
+
+\textbf{CWRU (97{,}6\,\% avec XGBoost).} Sur 10 classes croisant localisation et sévérité,
+XGBoost et Random Forest dépassent 97\,\%, démontrant que les features extraites capturent
+finement la signature des défauts de roulement et même leur \emph{intensité}. Le Decision
+Tree (93{,}9\,\%) et le MLP (93{,}5\,\%) restent honorables. La matrice de confusion
+(figure~\ref{fig:cm_cwru}) montre que les rares confusions surviennent entre sévérités
+voisines d'un même défaut --- une erreur \emph{bénigne} industriellement.
+
+\textbf{Mechanical Faults (89{,}6\,\% avec le MLP).} C'est le cas le plus instructif. Le
+Decision Tree s'effondre (50{,}9\,\%), les méthodes d'arbres plafonnent à 75\,\%, mais le
+\textbf{MLP atteint 89{,}6\,\%}. Cette inversion de hiérarchie s'explique : avec 132 features
+issues de 4 capteurs et des frontières de décision fortement non linéaires, le réseau de
+neurones exploite les interactions entre descripteurs que les arbres peinent à capturer.
+\emph{C'est précisément ce que justifie le benchmark} : aucun modèle n'est universellement
+supérieur, le choix doit être fait par dataset.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.48\textwidth}
+  \centering\includegraphics[width=\textwidth]{confusion_matrix_cwru.png}
+  \caption{CWRU (10 classes), XGBoost.}
+  \label{fig:cm_cwru}
+\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}
+  \centering\includegraphics[width=\textwidth]{confusion_matrix_mf_v2.png}
+  \caption{Mechanical Faults (4 classes), MLP.}
+  \label{fig:cm_mf}
+\end{subfigure}
+\caption{Matrices de confusion (jeu de test, découpage par fichier source).}
+\label{fig:cm}
+\end{figure}
+
+\section{Résultats de régression (RUL)}
+Le tableau~\ref{tab:regress} présente les résultats de pronostic sur CMAPSS FD001. La
+figure~\ref{fig:rul} compare la RUL prédite à la RUL réelle.
+
+\begin{table}[h]
+\centering\small
+\caption{Benchmark régression RUL --- CMAPSS FD001 (résultats réels).}
+\label{tab:regress}
+\begin{tabular}{l c c c c c}
+\toprule
+Modèle & MAE (cycles) & RMSE (cycles) & $R^2$ & Score NASA & Train (s) \\
+\midrule
+Huber Regressor & 12{,}44 & 16{,}02 & 0{,}853 & 14\,691 & 14{,}6 \\
+Decision Tree   & 12{,}70 & 18{,}53 & 0{,}804 & 45\,826 & 2{,}0 \\
+Random Forest   & 10{,}50 & 14{,}00 & 0{,}888 & 13\,255 & 69{,}8 \\
+\textbf{XGBoost} & \textbf{9{,}61} & \textbf{13{,}35} & \textbf{0{,}898} & \textbf{12\,249} & 18{,}9 \\
+MLP             & 10{,}15 & 14{,}22 & 0{,}884 & 13\,098 & 60{,}5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+XGBoost domine sur \emph{toutes} les métriques : une \textbf{erreur absolue moyenne de
+9{,}61 cycles} et un coefficient de détermination $R^2 = 0{,}90$ signifient que le modèle
+explique 90\,\% de la variance de la durée de vie restante, avec une erreur typique
+inférieure à 10 cycles. Le Decision Tree, malgré un MAE proche, obtient un score NASA
+catastrophique (45\,826 contre 12\,249), révélant qu'il commet des sur-estimations
+dangereuses que la métrique asymétrique pénalise --- illustration de l'importance de choisir
+la bonne métrique en maintenance.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{rul_prediction_cmapss.png}
+\caption{RUL prédite vs réelle (CMAPSS), modèle XGBoost.}
+\label{fig:rul}
+\end{figure}
+
+\section{Cas particulier : CNN 1D pour les engrenages (MCC5-THU)}
+Le dataset d'engrenages MCC5-THU est traité différemment : plutôt qu'une extraction
+manuelle de features, un \textbf{réseau de neurones convolutif 1D} (\texttt{GearFaultCNN},
+PyTorch) apprend directement les motifs pertinents à partir du signal tri-axial. Cette
+approche \emph{end-to-end} est adaptée aux signatures d'engrenage (fréquence d'engrènement
+GMF et bandes latérales) difficiles à résumer par des descripteurs génériques. Le CNN
+classe les huit modes de défaut, y compris les défauts \emph{mixtes}.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.46\textwidth}
+  \centering\includegraphics[width=\textwidth]{confusion_matrix_vbl.png}
+  \caption{VBL-VA001 (4 classes) --- séparation parfaite.}
+  \label{fig:cm_vbl}
+\end{subfigure}\hfill
+\begin{subfigure}{0.46\textwidth}
+  \centering\includegraphics[width=\textwidth]{confusion_matrix_mcc5_v3.png}
+  \caption{MCC5-THU (engrenages, 8 classes) --- CNN 1D.}
+  \label{fig:cm_mcc5}
+\end{subfigure}
+\caption{Matrices de confusion complémentaires.}
+\label{fig:cm2}
+\end{figure}
+
+\section{Sélection des modèles actifs}
+À l'issue du benchmark, les modèles finaux sont entraînés sur \textbf{100\,\% des données}
+et déployés. Le tableau~\ref{tab:actifs} récapitule les choix, fondés sur les performances
+réelles. La plateforme conserve néanmoins \emph{tous} les modèles : l'interface IA Lab
+permet de basculer le modèle actif d'un dataset à chaud, sans interruption.
+
+\begin{table}[h]
+\centering\small
+\caption{Modèles déployés par défaut et justification.}
+\label{tab:actifs}
+\begin{tabular}{>{\bfseries}l l l}
+\toprule
+Dataset & Modèle actif & Justification \\
+\midrule
+VBL-VA001 & XGBoost & 100\,\% + inférence rapide \\
+CWRU & XGBoost & meilleure exactitude (97{,}6\,\%) \\
+Mechanical Faults & MLP & nettement supérieur (89{,}6\,\% vs 75\,\%) \\
+CMAPSS & XGBoost & meilleur MAE/RMSE/$R^2$/NASA \\
+MCC5-THU & CNN 1D & apprentissage end-to-end des engrenages \\
+\bottomrule
+\end{tabular}
+\end{table}

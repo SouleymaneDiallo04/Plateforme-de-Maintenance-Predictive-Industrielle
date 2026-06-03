@@ -1,13 +1,17 @@
 """Routes de prédiction."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import numpy as np
+from sqlalchemy.orm import Session
 
 from backend.ml.model_registry import registry
 from backend.ml.health_tracker import fleet_manager
 from backend.ml.health_index import compute_health_index
+from backend.ml.model_versioning import version_manager
+from backend.api.auth import require_admin
+from backend.db.models import get_db
 
 router = APIRouter(tags=["Prédiction"])
 
@@ -97,3 +101,24 @@ def get_active_model(dataset: str):
         "active"     : registry.get_active_model(dataset),
         "available"  : registry.get_available_models(dataset),
     }
+
+
+@router.get("/model/versions/{dataset}/{model_name}")
+def list_model_versions(dataset: str, model_name: str,
+                        db: Session = Depends(get_db)):
+    """Historique des versions d'un modèle."""
+    return {
+        "dataset"   : dataset,
+        "model_name": model_name,
+        "versions"  : version_manager.list_versions(db, dataset, model_name),
+    }
+
+
+@router.post("/model/rollback", dependencies=[Depends(require_admin)])
+def rollback_model(dataset: str, model_name: str, version: int,
+                   db: Session = Depends(get_db)):
+    """Revient à une version antérieure du modèle (admin)."""
+    result = version_manager.rollback(db, dataset, model_name, version)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result

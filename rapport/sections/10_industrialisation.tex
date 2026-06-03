@@ -1,0 +1,123 @@
+\chapter{Industrialisation : du diagnostic à la solution déployable}
+\label{chap:indus}
+
+Ce chapitre regroupe les développements qui font passer PrognoSense d'un démonstrateur
+d'analyse à une solution \emph{déployable} et \emph{digne de confiance} sur le terrain.
+C'est ici que se concentre la valeur différenciante du projet.
+
+\section{Sévérité normalisée ISO 10816/20816}
+La plateforme exprime la sévérité dans le langage des ingénieurs de fiabilité : vitesse
+vibratoire efficace en mm/s et zones A/B/C/D par classe de machine (cf.
+chapitre~\ref{chap:pipeline}). La zone ISO est calculée à l'ingestion, injectée dans le
+diagnostic et affichée dans les ordres de travail. Cela rend chaque diagnostic
+\textbf{comparable et défendable}, à la différence d'un indice propriétaire.
+
+\section{Connectivité terrain : du capteur à l'ingestion}
+\subsection{Couche d'ingestion universelle}
+Le point d'entrée \texttt{POST /api/ingest/signal} accepte une forme d'onde
+d'accélération réelle, quelle qu'en soit la source, et la fait traverser tout le pipeline :
+extraction d'indicateurs $\rightarrow$ sévérité ISO $\rightarrow$ anomalie vs baseline
+machine $\rightarrow$ diagnostic spectral $\rightarrow$ indice de santé $\rightarrow$
+persistance et mise à jour de la flotte. Cette abstraction \emph{vendor-agnostic} est ce qui
+transforme la plateforme en système connectable au parc existant.
+
+\subsection{OPC-UA}
+Un connecteur OPC-UA (bibliothèque \texttt{asyncua}) lit périodiquement un n\oe ud de mesure
+sur un serveur OPC-UA --- le protocole standard de l'automatisme industriel. La chaîne
+complète a été validée localement à l'aide d'un serveur OPC-UA de démonstration : la machine
+virtuelle \texttt{POMPE\_OPCUA} a été correctement lue puis ingérée (états persistés,
+baseline créé), prouvant le fonctionnement de bout en bout \emph{capteur} $\rightarrow$
+\emph{ingestion}.
+
+\subsection{MQTT}
+Un connecteur MQTT (\texttt{paho-mqtt}) souscrit à un topic IIoT et transfère chaque message
+vers la même ingestion. Les deux connecteurs sont \emph{activés sur configuration}
+(variables d'environnement), sans impact lorsqu'ils ne sont pas utilisés.
+
+\section{Apprentissage du comportement sain par machine}
+Comme détaillé au chapitre~\ref{chap:anomalie}, le module \texttt{MachineBaseline} apprend
+la signature saine \emph{propre à chaque machine}, sans nécessiter d'historique de pannes.
+L'anomalie est mesurée relativement à cette référence : validation à $\approx 5\,\%$ sur un
+signal sain et $\approx 96\,\%$ sur un signal dégradé, avec désignation des indicateurs
+contributeurs.
+
+\section{Boucle fermée : de l'alerte à l'ordre de travail}
+PrognoSense ferme la boucle de maintenance. Lorsqu'une machine atteint un état critique
+(zone ISO D ou indice de santé bas), un \textbf{ordre de travail} est créé automatiquement,
+avec priorité (P1/P2), machine, défaut et action recommandée, en évitant les doublons (un
+seul ordre ouvert par machine). Cet ordre peut être \textbf{poussé vers la GMAO} de
+l'entreprise (SAP PM, IBM Maximo, Infor) via un connecteur webhook configurable. L'alerte
+devient ainsi une intervention planifiée et tracée. Des notifications par e-mail (SMTP)
+complètent le dispositif.
+
+\section{Indicateurs de fiabilité : mesurés, pas estimés}
+\subsection{Un choix méthodologique assumé}
+Un point central distingue PrognoSense de nombreux prototypes : les indicateurs de fiabilité
+ne sont pas \emph{estimés} à partir de la simulation, mais \textbf{mesurés sur l'historique
+réel des interventions}, conformément à leur définition normative :
+\begin{align}
+\text{MTBF} &= \frac{\text{temps de fonctionnement cumulé}}{\text{nombre de pannes réelles}} &
+\text{MTTR} &= \frac{\text{temps total de réparation}}{\text{nombre de réparations}} \\
+\text{Disponibilité} &= \frac{\text{MTBF}}{\text{MTBF}+\text{MTTR}}\times 100 & & \notag
+\end{align}
+Un MTBF ne se déduit pas d'un capteur : il se \emph{constate} sur les pannes effectives.
+C'est pourquoi la plateforme propose une saisie des événements de maintenance (le \og carnet
+de bord \fg) qui alimente ces calculs. Tant qu'aucune donnée n'est saisie, la plateforme
+\emph{n'affiche rien} plutôt qu'un chiffre fabriqué --- gage d'honnêteté scientifique.
+
+\subsection{Retour sur investissement}
+À partir des interventions, la plateforme estime les arrêts évités et les économies
+réalisées (paramètres ajustables : coût horaire de production, durée d'arrêt évitée),
+fournissant un argumentaire de ROI exploitable par la direction.
+
+\subsection{Efficacité prédictive et taux de fausses alarmes}
+En croisant les alertes émises avec les pannes réelles (fenêtre d'anticipation de 48\,h), la
+plateforme calcule la \textbf{précision}, le \textbf{rappel} et le \textbf{lead-time}
+(délai d'anticipation moyen). Surtout, un mécanisme de \textbf{validation par l'expert}
+(verdict vrai/faux positif sur chaque alerte) permet de mesurer le \emph{vrai} taux de
+fausses alarmes --- l'indicateur de confiance le plus exigé par les acheteurs de solutions
+PdM. Cette boucle \emph{human-in-the-loop} est, à la connaissance de l'auteur, rarement
+présente dans les travaux comparables.
+
+\section{Copilot ancré sur les connaissances (RAG)}
+Un assistant conversationnel, propulsé par le modèle de langage \textbf{Mistral}, répond en
+langage naturel et dispose du contexte temps réel de la flotte. Il est \textbf{ancré} sur une
+base de connaissances (normes ISO, guide des signatures de défaut, interprétation des
+indicateurs) via une recherche de similarité \textbf{TF-IDF} (RAG). Ses réponses
+\emph{citent les sources documentaires}, ce qui les rend précises et \textbf{traçables}.
+Exemple validé : à la question \og quel défaut provoque un pic à 2$\times$ la fréquence de
+rotation ?\fg, le copilot répond \og désalignement \fg{} en s'appuyant sur le guide des
+défauts, sources à l'appui. Le copilot démocratise ainsi l'expertise d'un analyste vibratoire
+auprès des techniciens.
+
+\section{Confiance et gouvernance des modèles}
+\subsection{Détection de dérive (concept drift)}
+À chaque prédiction, un \texttt{DriftDetector} compare la distribution des données de
+production à la distribution d'entraînement par test de \textbf{Kolmogorov-Smirnov}. Une
+dérive est signalée lorsque plus de 30\,\% des features testées présentent une p-value
+$< 0{,}05$, avec une sévérité critique si $\min(p)<0{,}001$. La plateforme recommande alors
+un réentraînement.
+
+\subsection{Calibration des probabilités}
+La calibration (isotonique, \texttt{CalibratedClassifierCV}) corrige le biais de confiance :
+sans elle, un modèle annonçant \og 94\,\% \fg{} peut n'être correct que dans 75\,\% des cas.
+Un diagramme de fiabilité et l'erreur de calibration espérée (ECE) sont calculés ; un modèle
+est jugé bien calibré si ECE $< 0{,}05$.
+
+\subsection{Versioning et retour arrière}
+Chaque réentraînement crée une \textbf{version} archivée du modèle (métriques, date,
+déclencheur). En cas de régression, un \textbf{rollback} en un clic réactive une version
+antérieure. Cette discipline MLOps garantit qu'aucune mise à jour ne dégrade durablement le
+service.
+
+\subsection{Journal d'audit}
+Chaque décision et chaque alerte est consignée et horodatée (prédiction, machine, confiance),
+avec persistance sur disque survivant aux redémarrages --- exigence de conformité (esprit
+ISO~13373) et de traçabilité.
+
+\section{Passage à l'échelle (time-series)}
+Pour un parc réel, la plateforme est \textbf{prête à basculer sur TimescaleDB} (PostgreSQL +
+extension time-series) sans modification du code : seule la variable de connexion change.
+Une lecture \textbf{agrégée par downsampling} (validée : plusieurs centaines de points bruts
+condensés en tranches horaires) et une \textbf{politique de rétention} sont fournies, ainsi
+qu'un \texttt{docker-compose} et une documentation de mise à l'échelle.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   ClipboardList, Bot, Send, Download,
   AlertTriangle, CheckCircle, Clock,
@@ -500,6 +500,313 @@ function SpectrumDiagnose() {
   )
 }
 
+// ── Formulaire de saisie d'événements de maintenance ─────────────────────────
+const FIELD_STYLE = {
+  width: '100%', background: 'var(--bg-elevated)',
+  border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+  color: 'var(--text)', padding: '8px 10px',
+  fontFamily: 'var(--font-mono)', fontSize: 11, outline: 'none',
+}
+
+function MaintenanceEventForm({ machines, onSaved }) {
+  const [form, setForm] = useState({
+    machine_id: '', event_type: 'corrective',
+    started_at: new Date().toISOString().slice(0, 16),
+    ended_at: '', fault_type: '', technician: '', cost_euros: '', notes: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const [error,  setError]  = useState(null)
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.machine_id || !form.started_at) {
+      setError('Machine et date de début requis'); return
+    }
+    setSaving(true); setError(null)
+    try {
+      await endpoints.createMaintenanceEvent({
+        ...form,
+        cost_euros: form.cost_euros ? parseFloat(form.cost_euros) : null,
+        ended_at  : form.ended_at || null,
+        parts_replaced: [],
+      })
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+      onSaved?.(form.machine_id)
+    } catch (e) {
+      const d = e.response?.data?.detail
+      setError(typeof d === 'string' ? d : 'Erreur lors de l\'enregistrement')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ fontFamily:'var(--font-display)', fontSize:11,
+        color:'var(--text-muted)', letterSpacing:'0.1em', marginBottom:6 }}>
+        ENREGISTRER UN ÉVÉNEMENT DE MAINTENANCE
+      </h3>
+      <p style={{ fontFamily:'var(--font-mono)', fontSize:10,
+        color:'var(--text-muted)', marginBottom:16 }}>
+        Les événements réels alimentent les KPIs (MTBF, MTTR, ROI) et la mesure d'efficacité prédictive.
+      </p>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Machine *</div>
+          <select value={form.machine_id} onChange={e => set('machine_id', e.target.value)} style={FIELD_STYLE}>
+            <option value="">Sélectionner...</option>
+            {machines.map(m => (
+              <option key={m.machine_id} value={m.machine_id}>{m.machine_id}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Type d'événement *</div>
+          <select value={form.event_type} onChange={e => set('event_type', e.target.value)} style={FIELD_STYLE}>
+            <option value="failure">Panne non planifiée</option>
+            <option value="corrective">Maintenance corrective</option>
+            <option value="planned">Maintenance planifiée</option>
+          </select>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Type de défaut</div>
+          <select value={form.fault_type} onChange={e => set('fault_type', e.target.value)} style={FIELD_STYLE}>
+            <option value="">Non spécifié</option>
+            <option value="roulement_externe">Bague externe roulement</option>
+            <option value="roulement_interne">Bague interne roulement</option>
+            <option value="roulement_bille">Défaut bille</option>
+            <option value="desequilibre">Déséquilibre rotor</option>
+            <option value="desalignement">Désalignement</option>
+            <option value="jeu_mecanique">Jeu mécanique</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Début *</div>
+          <input type="datetime-local" value={form.started_at}
+            onChange={e => set('started_at', e.target.value)} style={FIELD_STYLE} />
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Fin de l'intervention</div>
+          <input type="datetime-local" value={form.ended_at}
+            onChange={e => set('ended_at', e.target.value)} style={FIELD_STYLE} />
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Coût (€)</div>
+          <input type="number" value={form.cost_euros} placeholder="0.00"
+            onChange={e => set('cost_euros', e.target.value)} style={FIELD_STYLE} />
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom:5 }}>Technicien</div>
+          <input type="text" value={form.technician} placeholder="Nom"
+            onChange={e => set('technician', e.target.value)} style={FIELD_STYLE} />
+        </div>
+        <div style={{ gridColumn:'2 / -1' }}>
+          <div className="metric-label" style={{ marginBottom:5 }}>Notes / Pièces remplacées</div>
+          <input type="text" value={form.notes} placeholder="Roulement SKF 6205 remplacé..."
+            onChange={e => set('notes', e.target.value)} style={FIELD_STYLE} />
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ marginTop:12, padding:'7px 10px', background:'var(--red-dim)',
+          border:'1px solid var(--red)', borderRadius:'var(--radius)',
+          fontFamily:'var(--font-mono)', fontSize:10, color:'var(--red)' }}>
+          ⛔ {error}
+        </div>
+      )}
+
+      <button className="btn btn-primary" onClick={handleSave}
+        disabled={saving || !form.machine_id} style={{ marginTop:16 }}>
+        {saved ? '✓ Enregistré' : saving ? 'Sauvegarde...' : 'Enregistrer l\'événement'}
+      </button>
+    </div>
+  )
+}
+
+// ── Panneau KPIs réels / ROI / efficacité prédictive ─────────────────────────
+function KpiTile({ label, value, unit, color }) {
+  return (
+    <div style={{ background:'var(--bg-elevated)', border:'1px solid var(--border)',
+      borderRadius:'var(--radius)', padding:'10px 12px' }}>
+      <div className="metric-label">{label}</div>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:22,
+        color: color || 'var(--cyan)', fontWeight:700, marginTop:3 }}>
+        {value ?? '—'}
+        {value != null && unit && (
+          <span style={{ fontSize:11, color:'var(--text-muted)', marginLeft:3 }}>{unit}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RealKpiPanel({ machines, machine, onMachineChange, refreshKey }) {
+  const [kpi, setKpi] = useState(null)
+  const [roi, setRoi] = useState(null)
+  const [acc, setAcc] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(() => {
+    if (!machine) return
+    setLoading(true)
+    Promise.all([
+      endpoints.kpiReal(machine),
+      endpoints.kpiRoi(machine),
+      endpoints.predictionAccuracy(machine),
+    ]).then(([a, b, c]) => { setKpi(a.data); setRoi(b.data); setAcc(c.data) })
+      .catch(() => {}).finally(() => setLoading(false))
+  }, [machine])
+
+  useEffect(() => { load() }, [load, refreshKey])
+
+  return (
+    <div className="card">
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <h3 style={{ fontFamily:'var(--font-display)', fontSize:11,
+          color:'var(--text-muted)', letterSpacing:'0.1em', margin:0 }}>
+          KPIs RÉELS & EFFICACITÉ PRÉDICTIVE
+        </h3>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <select value={machine} onChange={e => onMachineChange(e.target.value)}
+            style={{ ...FIELD_STYLE, width:'auto', padding:'5px 8px' }}>
+            {machines.map(m => (
+              <option key={m.machine_id} value={m.machine_id}>{m.machine_id}</option>
+            ))}
+          </select>
+          <button onClick={load} disabled={loading} className="btn btn-ghost" style={{ fontSize:10 }}>
+            <RefreshCw size={11} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            Actualiser
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs maintenance */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10, marginBottom:12 }}>
+        <KpiTile label="MTBF" value={kpi?.MTBF} unit="h" color="var(--cyan)" />
+        <KpiTile label="MTTR" value={kpi?.MTTR} unit="h" color="var(--amber)" />
+        <KpiTile label="DISPONIBILITÉ" value={kpi?.availability} unit="%" color="var(--green)" />
+        <KpiTile label="COÛT TOTAL" value={kpi?.total_cost_eur} unit="€" color="var(--text)" />
+      </div>
+
+      {/* ROI */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, marginBottom:12 }}>
+        <KpiTile label="ARRÊT ÉVITÉ" value={roi?.downtime_avoided_hours} unit="h" color="var(--green)" />
+        <KpiTile label="COÛT ÉVITÉ" value={roi?.estimated_cost_avoided} unit="€" color="var(--green)" />
+        <KpiTile label="RATIO ROI" value={roi?.roi_ratio} unit="×" color="var(--cyan)" />
+      </div>
+
+      {/* Efficacité prédictive */}
+      <div style={{ borderTop:'1px solid var(--border)', paddingTop:12 }}>
+        <div className="metric-label" style={{ marginBottom:8 }}>
+          EFFICACITÉ PRÉDICTIVE (fenêtre {acc?.window_hours ?? 48}h)
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10 }}>
+          <KpiTile label="PRÉCISION" value={acc ? Math.round(acc.precision * 100) : null} unit="%" color="var(--cyan)" />
+          <KpiTile label="RECALL" value={acc ? Math.round(acc.recall * 100) : null} unit="%" color="var(--amber)" />
+          <KpiTile label="F1" value={acc?.f1_score} color="var(--text)" />
+          <KpiTile label="LEAD-TIME" value={acc?.avg_lead_time_hours} unit="h" color="var(--green)" />
+        </div>
+        {acc && (
+          <div style={{ marginTop:10, fontFamily:'var(--font-mono)', fontSize:10,
+            color:'var(--text-muted)', lineHeight:1.6 }}>
+            TP={acc.true_positives} · FP={acc.false_positives} · FN={acc.false_negatives}
+            {' — '}{acc.interpretation?.recall}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Panneau Ordres de travail (boucle fermée GMAO) ───────────────────────────
+const WO_PRIO = { P1: 'var(--red)', P2: 'var(--amber)', P3: 'var(--cyan)' }
+const WO_STATUS_LABEL = { open: 'OUVERT', in_progress: 'EN COURS', closed: 'CLÔTURÉ' }
+
+function WorkOrdersPanel() {
+  const [wos, setWos]       = useState([])
+  const [openCount, setOpen]= useState(0)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    endpoints.workOrders()
+      .then(r => { setWos(r.data.work_orders || []); setOpen(r.data.open_count || 0) })
+      .catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t) }, [load])
+
+  const setStatus = (id, status) => endpoints.updateWorkOrder(id, status).then(load).catch(() => {})
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em', margin: 0 }}>
+            ORDRES DE TRAVAIL — BOUCLE FERMÉE GMAO
+          </h3>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', marginTop: 4 }}>
+            Créés automatiquement sur état critique · poussables vers SAP PM / Maximo (webhook)
+          </p>
+        </div>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: openCount > 0 ? 'var(--amber)' : 'var(--green)', fontWeight: 700 }}>
+          {openCount}<span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>ouverts</span>
+        </span>
+      </div>
+
+      {wos.length === 0 ? (
+        <div style={{ padding: 28, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+          {loading ? 'Chargement...' : 'Aucun ordre de travail — ils apparaîtront sur alerte critique (zone ISO D / HI bas).'}
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+              {['Prio', 'Machine', 'Intitulé', 'Statut', 'GMAO', 'Action'].map(h => (
+                <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontFamily: 'var(--font-display)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {wos.map(w => (
+              <tr key={w.id} style={{ borderBottom: '1px solid var(--border)', opacity: w.status === 'closed' ? 0.5 : 1 }}>
+                <td style={{ padding: '8px 14px' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, color: WO_PRIO[w.priority] || 'var(--cyan)', border: `1px solid ${WO_PRIO[w.priority] || 'var(--cyan)'}`, borderRadius: 8, padding: '2px 7px' }}>
+                    {w.priority}
+                  </span>
+                </td>
+                <td style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-primary)' }}>{w.machine_id}</td>
+                <td style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text)', maxWidth: 280 }}>
+                  {w.title}
+                  {w.iso_zone && <span style={{ color: 'var(--text-dim)' }}> · zone {w.iso_zone}</span>}
+                </td>
+                <td style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 9, color: w.status === 'closed' ? 'var(--green)' : w.status === 'in_progress' ? 'var(--cyan)' : 'var(--amber)' }}>
+                  {WO_STATUS_LABEL[w.status] || w.status}
+                </td>
+                <td style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 9, color: w.pushed_to_cmms ? 'var(--green)' : 'var(--text-dim)' }}>
+                  {w.pushed_to_cmms ? `✓ ${w.cmms_ref || 'poussé'}` : 'interne'}
+                </td>
+                <td style={{ padding: '8px 14px' }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {w.status === 'open' && (
+                      <button onClick={() => setStatus(w.id, 'in_progress')} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, cursor: 'pointer', padding: '3px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--cyan)', background: 'transparent', color: 'var(--cyan)' }}>Prendre</button>
+                    )}
+                    {w.status !== 'closed' && (
+                      <button onClick={() => setStatus(w.id, 'closed')} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, cursor: 'pointer', padding: '3px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--green)', background: 'transparent', color: 'var(--green)' }}>Clôturer</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 export default function Maintenance({ alerts: externalAlerts = [] }) {
   const [alerts,   setAlerts]   = useState(externalAlerts)
   const [messages, setMessages] = useState([{
@@ -515,9 +822,23 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
   const chatRef  = useRef(null)
   const pollRef  = useRef(null)
 
+  // Événements de maintenance & KPIs réels
+  const [machines,   setMachines]   = useState([])
+  const [kpiMachine, setKpiMachine] = useState('Turbine_01')
+  const [kpiKey,     setKpiKey]     = useState(0)
+
   useEffect(() => {
     endpoints.alerts()
       .then(r => setAlerts(r.data.alerts || []))
+      .catch(() => {})
+    endpoints.fleet()
+      .then(r => {
+        const list = r.data.machines || []
+        setMachines(list)
+        if (list.length && !list.some(m => m.machine_id === 'Turbine_01')) {
+          setKpiMachine(list[0].machine_id)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -555,7 +876,7 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
         {
           role   : 'assistant',
           content: 'Erreur de connexion au Copilot. ' +
-                   'Vérifiez la clé ANTHROPIC_API_KEY.'
+                   'Vérifiez la clé MISTRAL_API_KEY.'
         }
       ])
     } finally {
@@ -590,21 +911,35 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
     window.open(endpoints.exportBenchmark(), '_blank')
   }
 
-  // Polling réentraînement
+  // Réentraînement : POST réel puis polling du statut
+  const [retrainDataset, setRetrainDataset] = useState('MF')
+  const [retrainLabel,   setRetrainLabel]   = useState('')
+
   const startRetrain = async () => {
-    setRetrain({ running: true, progress: 0 })
+    if (!retrainLabel.trim() || retrain.running) return
+    setRetrain({ running: true, progress: 0, message: 'Lancement...' })
+    try {
+      await endpoints.retrainDemo({
+        dataset  : retrainDataset,
+        new_label: retrainLabel.trim(),
+        n_samples: 40,
+      })
+    } catch (e) {
+      const d = e.response?.data?.detail
+      setRetrain({
+        running : false, progress: 0,
+        message : typeof d === 'string' ? d
+                  : (e.response?.status === 403
+                     ? 'Droits administrateur requis'
+                     : 'Erreur au lancement'),
+      })
+      return
+    }
     pollRef.current = setInterval(async () => {
       try {
-        const r = await endpoints.retrainStatus()
-        const s = r.data
-        setRetrain({
-          running  : s.running,
-          progress : s.progress,
-          message  : s.message,
-        })
-        if (!s.running) {
-          clearInterval(pollRef.current)
-        }
+        const s = (await endpoints.retrainStatus()).data
+        setRetrain({ running: s.running, progress: s.progress, message: s.message })
+        if (!s.running) clearInterval(pollRef.current)
       } catch (e) {
         clearInterval(pollRef.current)
       }
@@ -814,7 +1149,7 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
                 fontSize   : 9,
                 color      : 'var(--text-muted)',
               }}>
-                Propulsé par Claude · Contexte flotte injecté
+                Propulsé par Mistral · Contexte flotte injecté
               </div>
             </div>
             <div style={{ marginLeft: 'auto' }}>
@@ -968,6 +1303,23 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
         </div>
       </div>
 
+      {/* Événements de maintenance & KPIs réels */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, alignItems:'start' }}>
+        <MaintenanceEventForm
+          machines = {machines}
+          onSaved  = {(mid) => { if (mid) setKpiMachine(mid); setKpiKey(k => k + 1) }}
+        />
+        <RealKpiPanel
+          machines        = {machines}
+          machine         = {kpiMachine}
+          onMachineChange = {setKpiMachine}
+          refreshKey      = {kpiKey}
+        />
+      </div>
+
+      {/* Ordres de travail — boucle fermée GMAO */}
+      <WorkOrdersPanel />
+
       {/* Section réentraînement */}
       <div className="card">
         <h3 style={{
@@ -979,15 +1331,34 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
         }}>
           RÉENTRAÎNEMENT DES MODÈLES
         </h3>
+        <p style={{ fontFamily:'var(--font-mono)', fontSize:10,
+          color:'var(--text-muted)', marginBottom:14 }}>
+          Intègre un nouveau type de défaut : choisissez le dataset, nommez le défaut,
+          le modèle MLP est réentraîné et une nouvelle version est créée (admin requis).
+        </p>
         <div style={{
           display    : 'flex',
           alignItems : 'center',
-          gap        : 16,
+          gap        : 12,
+          flexWrap   : 'wrap',
         }}>
+          <select value={retrainDataset}
+            onChange={e => setRetrainDataset(e.target.value)}
+            disabled={retrain.running}
+            style={{ ...FIELD_STYLE, width:'auto' }}>
+            <option value="MF">MF (Mechanical Faults)</option>
+            <option value="CWRU">CWRU (Roulements)</option>
+            <option value="VBL">VBL-VA001</option>
+          </select>
+          <input type="text" value={retrainLabel}
+            onChange={e => setRetrainLabel(e.target.value)}
+            disabled={retrain.running}
+            placeholder="Nom du nouveau défaut..."
+            style={{ ...FIELD_STYLE, width:200 }} />
           <button
             className = "btn btn-primary"
             onClick   = {startRetrain}
-            disabled  = {retrain.running}
+            disabled  = {retrain.running || !retrainLabel.trim()}
           >
             <RefreshCw
               size  = {14}
@@ -1038,7 +1409,17 @@ export default function Maintenance({ alerts: externalAlerts = [] }) {
               fontSize   : 11,
             }}>
               <CheckCircle size={14} />
-              Réentraînement terminé
+              {retrain.message || 'Réentraînement terminé'}
+            </div>
+          )}
+
+          {!retrain.running && retrain.progress === 0 && retrain.message && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              color: 'var(--red)', fontFamily: 'var(--font-mono)', fontSize: 11,
+            }}>
+              <AlertTriangle size={14} />
+              {retrain.message}
             </div>
           )}
         </div>
