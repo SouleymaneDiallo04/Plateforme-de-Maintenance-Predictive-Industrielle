@@ -12,7 +12,8 @@ from backend.api.routes import (
     retrain, dataset, alerts, spectral,
     kpi, fault_injection, config, copilot,
     notifications, export, docs_tech, explainability,
-    kpi_real, analytics, anomaly, ingest, workorders
+    kpi_real, analytics, anomaly, ingest, workorders,
+    technicians
 )
 from backend.api.routes.auth_routes import router as auth_router
 from backend.ml.model_registry import registry
@@ -39,6 +40,87 @@ app.add_middleware(
     allow_headers     = ["*"],
 )
 
+def _seed_demo_accounts():
+    """
+    Crée les comptes de démonstration s'ils n'existent pas : un admin et
+    quatre techniciens aux compétences/certifications variées (pour illustrer
+    l'affectation par compétence). Idempotent.
+    """
+    from backend.db.models import SessionLocal, User
+    from backend.api.auth import hash_password
+
+    demo_techs = [
+        # email, nom, compétences, certif (1..4)
+        ("karim@prognosense.com",   "Karim B.",   ["Roulements & montage", "Turbomachines"], 3),
+        ("salma@prognosense.com",   "Salma R.",   ["Roulements & montage", "Alignement"],    2),
+        ("yassine@prognosense.com", "Yassine M.", ["Engrenages / réducteurs", "Mécanique générale"], 2),
+        ("omar@prognosense.com",    "Omar T.",    ["Équilibrage", "Alignement", "Mécanique générale"], 1),
+        # Profils seniors / experts garantissant la couverture de TOUS les défauts
+        ("fatima@prognosense.com",  "Fatima Z.",  ["Analyse vibratoire", "Roulements & montage", "Turbomachines"], 4),
+        ("hicham@prognosense.com",  "Hicham A.",  ["Engrenages / réducteurs", "Analyse vibratoire"], 3),
+        ("nadia@prognosense.com",   "Nadia E.",   ["Équilibrage", "Alignement", "Roulements & montage", "Mécanique générale"], 2),
+    ]
+    db = SessionLocal()
+    try:
+        created = []
+        # Admin de démo
+        if not db.query(User).filter(User.email == "demo@prognosense.com").first():
+            db.add(User(email="demo@prognosense.com",
+                        hashed_password=hash_password("Demo1234!"),
+                        role="admin", name="Admin Démo"))
+            created.append("admin demo@prognosense.com")
+        # Techniciens de démo
+        for email, name, comps, certif in demo_techs:
+            if not db.query(User).filter(User.email == email).first():
+                db.add(User(email=email, hashed_password=hash_password("Tech1234!"),
+                            role="technicien", name=name, competences=comps,
+                            certif_niveau=certif, statut="disponible"))
+                created.append(name)
+        db.commit()
+        if created:
+            print(f"  [OK] Comptes demo crees : {', '.join(created)}")
+        else:
+            print("  [OK] Comptes demo deja presents")
+    except Exception as e:
+        db.rollback()
+        print(f"  [WARN] Seed comptes demo : {e}")
+    finally:
+        db.close()
+
+
+def _seed_spare_parts():
+    """Garnit le magasin de pièces de rechange (références réalistes). Idempotent.
+    NSK 6207 volontairement en RUPTURE (qty 0) pour illustrer le cas « à commander »."""
+    from backend.db.models import SessionLocal, SparePart
+
+    parts = [
+        # reference, designation, category, qty, location, cout
+        ("SKF 6205-2RS", "Roulement à billes 25×52×15", "Roulement", 6, "Magasin A — Rayon R-03", 28.0),
+        ("SKF 6203-2RS", "Roulement à billes 17×40×12", "Roulement", 4, "Magasin A — Rayon R-03", 19.0),
+        ("NSK 6207",     "Roulement à billes 35×72×17", "Roulement", 0, "Magasin A — Rayon R-04", 41.0),
+        ("REICH ROTEX 28", "Garniture élastomère d'accouplement", "Accouplement", 3, "Magasin B — Rayon R-11", 75.0),
+        ("Pignon réducteur Z21 m3", "Pignon acier 20MnCr5, Z=21 module 3", "Engrenage", 1, "Magasin C — Rayon R-20", 240.0),
+        ("Boulonnerie M16-8.8", "Kit boulonnerie palier M16 classe 8.8", "Visserie", 25, "Magasin A — Rayon R-01", 6.0),
+        ("Masses d'équilibrage", "Jeu de masses correctrices d'équilibrage", "Consommable", 10, "Magasin B — Rayon R-09", 12.0),
+    ]
+    db = SessionLocal()
+    try:
+        added = 0
+        for ref, desig, cat, qty, loc, cost in parts:
+            if not db.query(SparePart).filter(SparePart.reference == ref).first():
+                db.add(SparePart(reference=ref, designation=desig, category=cat,
+                                 stock_qty=qty, location=loc, unit_cost_eur=cost))
+                added += 1
+        db.commit()
+        print(f"  [OK] Stock magasin : {added} pieces ajoutees" if added
+              else "  [OK] Stock magasin deja present")
+    except Exception as e:
+        db.rollback()
+        print(f"  [WARN] Seed stock : {e}")
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 async def startup():
     print("=" * 50)
@@ -48,6 +130,9 @@ async def startup():
     # Initialise la base SQLite (crée les tables si absentes)
     init_db()
     print("  [OK] Base de donnees initialisee")
+
+    _seed_demo_accounts()
+    _seed_spare_parts()
 
     registry.load_all()
 
@@ -101,6 +186,7 @@ app.include_router(analytics.router,        prefix="/api")
 app.include_router(anomaly.router,          prefix="/api")
 app.include_router(ingest.router,           prefix="/api")
 app.include_router(workorders.router,       prefix="/api")
+app.include_router(technicians.router,      prefix="/api")
 app.include_router(auth_router,            prefix="/api")
 
 

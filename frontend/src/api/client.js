@@ -178,4 +178,29 @@ export const endpoints = {
     persistedAlerts   : (machine_id) => api.get('/alerts/persisted', { params: machine_id ? { machine_id } : {} }),
     setAlertVerdict   : (alertId, data) => api.post(`/alerts/${alertId}/verdict`, data),
     falseAlarmRate    : (machine_id) => api.get('/analytics/false-alarm-rate', { params: machine_id ? { machine_id } : {} }),
+
+    // ── Techniciens & affectation des interventions ──────────────────────────
+    competencyReferential : ()        => api.get('/competency/referential'),
+    technicians           : ()        => api.get('/technicians'),
+    createTechnician      : (data)    => api.post('/technicians', data),
+    updateTechnician      : (id, data)=> api.patch(`/technicians/${id}`, data),
+
+    // Affectation (admin)
+    workOrderCandidates   : (id)         => api.get(`/workorders/${id}/candidates`),
+    assignWorkOrder       : (id, techId) => api.post(`/workorders/${id}/assign`, { technicien_id: techId }),
+    verifyWorkOrder       : (id)         => api.post(`/workorders/${id}/verify`),
+    workOrderReport       : (id)         => api.get(`/workorders/${id}/report`),
+
+    // Côté technicien
+    myWorkOrders          : (status)  => api.get('/me/workorders', { params: status ? { status } : {} }),
+    startWorkOrder        : (id)      => api.post(`/workorders/${id}/start`),
+    completeWorkOrder     : (id, data)=> api.post(`/workorders/${id}/complete`, data),
+
+    // Notifications
+    notifications         : (unread)  => api.get('/notifications', { params: unread ? { unread_only: true } : {} }),
+    readNotification      : (id)      => api.post(`/notifications/${id}/read`),
+    readAllNotifications  : ()        => api.post('/notifications/read-all'),
+
+    // Magasin / stock de pièces de rechange
+    stock                 : ()        => api.get('/stock'),
 }

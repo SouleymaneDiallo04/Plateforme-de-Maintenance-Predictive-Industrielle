@@ -80,19 +80,23 @@ def get_machine_kpi(machine_id: str,
     kpis   = compute_kpis(alerts, total_hours)
 
     # Tendance de dégradation
-    history = machine.get_history()
-    hi_vals = history.get('health_index', [])
+    history  = machine.get_history()
+    hi_vals  = history.get('health_index', [])
+    rul_vals = [r for r in history.get('rul', []) if r is not None]
 
-    if len(hi_vals) > 10:
-        slope   = float(np.polyfit(range(len(hi_vals)), hi_vals, 1)[0])
-        # Estimation cycles avant maintenance (HI < 20%)
-        current_hi = hi_vals[-1] if hi_vals else 100
-        if slope < 0:
-            cycles_to_maintenance = int((current_hi - 20) / abs(slope))
-        else:
-            cycles_to_maintenance = 9999
-    else:
-        cycles_to_maintenance = None
+    # Cycles restants avant intervention :
+    #   1) machine avec pronostic RUL (turbomoteur) → la RUL réelle restante ;
+    #   2) sinon, estimation par la pente du Health Index (si dégradation) ;
+    #   3) sinon None — pas de dégradation détectée, on n'invente pas de chiffre
+    #      (plutôt que l'ancien sentinel « 9999 » qui s'affichait en dur).
+    cycles_to_maintenance = None
+    if rul_vals:
+        cycles_to_maintenance = int(round(rul_vals[-1]))
+    elif len(hi_vals) > 10:
+        slope      = float(np.polyfit(range(len(hi_vals)), hi_vals, 1)[0])
+        current_hi = hi_vals[-1]
+        if slope < -0.01 and current_hi > 20:
+            cycles_to_maintenance = max(0, int((current_hi - 20) / abs(slope)))
 
     return {
         "machine_id"            : machine_id,

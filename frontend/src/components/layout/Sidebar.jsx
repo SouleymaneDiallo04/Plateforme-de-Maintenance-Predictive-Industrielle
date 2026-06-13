@@ -3,17 +3,19 @@ import {
   LayoutDashboard, Activity, FlaskConical,
   Timer, ClipboardList, Settings, Zap,
   ChevronRight, Wifi, WifiOff, ShieldCheck,
-  LogOut, User
+  LogOut, User, Wrench
 } from 'lucide-react'
 
+// techHidden : onglet masqué pour le rôle « technicien » (accès restreint au terrain)
 const NAV_ITEMS = [
-  { id: 'overview',    icon: LayoutDashboard, label: 'Vue Globale',   short: 'VUE' },
-  { id: 'monitoring',  icon: Activity,        label: 'Monitoring',    short: 'MON' },
-  { id: 'ialab',       icon: FlaskConical,    label: 'IA Lab',        short: 'LAB' },
-  { id: 'prognostic',  icon: Timer,           label: 'Pronostic RUL', short: 'RUL' },
-  { id: 'maintenance', icon: ClipboardList,   label: 'Maintenance',   short: 'LOG' },
-  { id: 'audit',       icon: ShieldCheck,     label: 'Audit Trail',   short: 'AUD' },
-  { id: 'config',      icon: Settings,        label: 'Configuration', short: 'CFG' },
+  { id: 'overview',     icon: LayoutDashboard, label: 'Vue Globale',   short: 'VUE' },
+  { id: 'monitoring',   icon: Activity,        label: 'Monitoring',    short: 'MON' },
+  { id: 'ialab',        icon: FlaskConical,    label: 'IA Lab',        short: 'LAB', techHidden: true },
+  { id: 'prognostic',   icon: Timer,           label: 'Pronostic RUL', short: 'RUL' },
+  { id: 'maintenance',  icon: ClipboardList,   label: 'Maintenance',   short: 'LOG', techHidden: true },
+  { id: 'interventions',icon: Wrench,          label: 'Interventions', short: 'INT' },
+  { id: 'audit',        icon: ShieldCheck,     label: 'Audit Trail',   short: 'AUD', techHidden: true },
+  { id: 'config',       icon: Settings,        label: 'Configuration', short: 'CFG', techHidden: true },
 ]
 
 export default function Sidebar({ active, onNav, wsStatus, alerts, user, onLogout }) {
@@ -82,7 +84,9 @@ export default function Sidebar({ active, onNav, wsStatus, alerts, user, onLogou
 
       {/* Navigation */}
       <nav style={{ flex: 1, padding: '12px 8px', overflow: 'auto' }}>
-        {NAV_ITEMS.map(({ id, icon: Icon, label }) => {
+        {NAV_ITEMS
+          .filter(item => !(user?.role === 'technicien' && item.techHidden))
+          .map(({ id, icon: Icon, label }) => {
           const isActive = active === id
           return (
             <button

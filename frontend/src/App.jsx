@@ -7,15 +7,19 @@ import Monitoring  from './pages/Monitoring'
 import IALab       from './pages/IALab'
 import Prognostic  from './pages/Prognostic'
 import Maintenance from './pages/Maintenance'
+import Interventions from './pages/Interventions'
 import Config      from './pages/Config'
 import Audit       from './pages/Audit'
 import { useSimulationWS } from './hooks/useWebSocket'
 import { endpoints, auth } from './api/client'
 
 export default function App() {
-  const [page,   setPage]   = useState('overview')
-  const [alerts, setAlerts] = useState([])
   const [user,   setUser]   = useState(auth.getUser())
+  // Le technicien atterrit directement sur ses interventions
+  const [page,   setPage]   = useState(
+    auth.getRole() === 'technicien' ? 'interventions' : 'overview'
+  )
+  const [alerts, setAlerts] = useState([])
   const ws = useSimulationWS()
 
   // Vérifier expiration au montage
@@ -62,13 +66,14 @@ export default function App() {
   }
 
   const pages = {
-    overview   : <Overview    ws={ws} />,
-    monitoring : <Monitoring  ws={ws} />,
-    ialab      : <IALab />,
-    prognostic : <Prognostic  ws={ws} />,
-    maintenance: <Maintenance ws={ws} alerts={alerts} />,
-    audit      : <Audit />,
-    config     : <Config />,
+    overview     : <Overview    ws={ws} />,
+    monitoring   : <Monitoring  ws={ws} />,
+    ialab        : <IALab />,
+    prognostic   : <Prognostic  ws={ws} />,
+    maintenance  : <Maintenance ws={ws} alerts={alerts} />,
+    interventions: <Interventions />,
+    audit        : <Audit />,
+    config       : <Config />,
   }
 
   return (

@@ -193,10 +193,20 @@ class ModelRegistry:
         """
         model_name = model_name or self.get_active_model(dataset)
 
-        # Récupérer le modèle
-        model_obj  = self._models.get(dataset, {}).get(model_name)
+        # Récupérer le modèle. Alias : le modèle de régression CMAPSS est stocké
+        # sous « Huber » mais référencé « Huber Regressor » (préférences, UI,
+        # benchmark) → sans cet alias, la prédiction RUL échouait silencieusement.
+        models_for_ds = self._models.get(dataset, {})
+        _ALIASES = {"Huber Regressor": "Huber"}
+        lookup_name = model_name if model_name in models_for_ds \
+            else _ALIASES.get(model_name, model_name)
+        model_obj = models_for_ds.get(lookup_name)
         if model_obj is None:
             return {'error': f"Modèle {model_name} non disponible pour {dataset}"}
+
+        # Nettoyage NaN/Inf (CMAPSS : capteurs constants = valeurs manquantes)
+        # sinon la prédiction RUL renvoie NaN → courbe vide côté frontend.
+        X = np.nan_to_num(np.asarray(X, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
 
         # Normalisation si nécessaire
         scaler = self._scalers.get(dataset)
@@ -299,16 +309,26 @@ class ModelRegistry:
             'autoencoder_thresholds', {}
         ).get(dataset, 50.0)
 
+        # Nettoyage NaN/Inf : CMAPSS contient des capteurs constants (valeurs
+        # manquantes) qui, sans traitement, font diverger l'erreur de
+        # reconstruction → score NaN → courbe d'anomalie vide côté frontend.
+        X = np.nan_to_num(np.asarray(X, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+
         result = detector.predict(X)
 
         # Recalculer is_anomaly avec le seuil dynamique
         # (le score 0-100% reste inchangé)
         is_anomaly = result['anomaly_score'] > dynamic_threshold
 
+        score_mean = float(np.nan_to_num(
+            np.asarray(result['anomaly_score'], dtype=float), nan=0.0).mean())
+        conf_mean = float(np.nan_to_num(
+            np.asarray(result['confidence'], dtype=float), nan=0.0).mean())
+
         out = {
-            'anomaly_score'   : float(result['anomaly_score'].mean()),
+            'anomaly_score'   : score_mean,
             'is_anomaly'      : bool(is_anomaly.any()),
-            'confidence'      : float(result['confidence'].mean()),
+            'confidence'      : conf_mean,
             'threshold_used'  : dynamic_threshold,
             'timestamp'       : datetime.now().isoformat()
         }

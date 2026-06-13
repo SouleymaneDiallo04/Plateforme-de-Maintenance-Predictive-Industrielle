@@ -111,7 +111,6 @@ export default function Monitoring({ ws }) {
   const [kpis,    setKpis]    = useState(null)
   const [speed,   setSpeed]   = useState(0.5)
   const [running, setRunning] = useState(true)
-  const timerRef  = useRef(null)
   const kpiRef    = useRef(null)
 
   const { data, history, pause, play, reset, setSpeed: wsSetSpeed } = ws
@@ -130,31 +129,11 @@ export default function Monitoring({ ws }) {
     })
   }, [data?.features])
 
-  // ── FFT : calculée depuis le signal, indépendamment ───────────────────────
-  const lastSignalRef = useRef(null)
+  // ── FFT : fournie directement par le backend dans chaque message WS ────────
+  // (auparavant un appel REST throttlé, fragile et désynchronisé → spectre vide)
   useEffect(() => {
-    if (!data?.signal?.length) return
-
-    // Eviter de recalculer si le signal n'a pas changé
-    const sigKey = data.signal.slice(0, 5).join(',')
-    if (sigKey === lastSignalRef.current) return
-    lastSignalRef.current = sigKey
-
-    clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      endpoints.spectrum({
-        signal        : data.signal,
-        sampling_rate : 12800,
-      })
-        .then(r => {
-          if (r?.data?.fft) {
-            setFftData(r.data.fft)
-          }
-        })
-        .catch(err => console.error('FFT error:', err))
-    }, 2000)  // 2s de debounce
-    return () => clearTimeout(timerRef.current)
-  }, [data?.signal])
+    if (data?.fft?.freqs?.length) setFftData(data.fft)
+  }, [data?.fft])
 
   // Charger KPIs de la machine active
   useEffect(() => {
@@ -176,23 +155,25 @@ export default function Monitoring({ ws }) {
   }
   const handleSpeed = (s) => { setSpeed(s); wsSetSpeed(s) }
 
-  // Spectre FFT pour le graphique
-    // Préparer les données FFT — robuste
+  // Spectre FFT pour le graphique — mise à l'échelle AUTOMATIQUE
+  // (le plancher de bruit du spectre est ramené à 0 et les pics ressortent ;
+  //  robuste quelle que soit l'amplitude du signal, contrairement à un
+  //  décalage fixe « +80 dB » qui pouvait tout écraser à zéro)
   const fftChartData = (() => {
     if (!fftData?.freqs?.length) return []
     const freqs  = fftData.freqs
     const specDb = fftData.spectrum_db ?? fftData.spectrum_lin
     if (!specDb?.length) return []
 
+    const window = specDb.slice(0, 256).filter(v => Number.isFinite(v))
+    const floor  = window.length ? Math.min(...window) : 0
+
     return freqs
       .slice(0, 256)
       .map((f, i) => ({
         freq : Math.round(f),
-        amp  : fftData.spectrum_db
-          ? Math.max(0, (specDb[i] ?? -80) + 80)
-          : Math.max(0, (specDb[i] ?? 0) * 1000),
+        amp  : Number.isFinite(specDb[i]) ? Math.max(0, specDb[i] - floor) : 0,
       }))
-      .filter(d => isFinite(d.amp))
   })()
 
   const hiColor = (data?.health_index ?? 100) >= 70 ? 'var(--green)'

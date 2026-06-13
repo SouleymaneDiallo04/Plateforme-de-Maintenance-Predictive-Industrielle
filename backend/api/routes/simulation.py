@@ -324,6 +324,24 @@ async def websocket_simulation(websocket: WebSocket):
                 cycle         = cycle,
             )
 
+            # ── Spectre FFT calculé côté serveur et envoyé dans le payload ──
+            # (fiable et synchrone, contrairement à un appel REST throttlé côté
+            #  frontend qui ne se déclenchait pas de façon fiable)
+            try:
+                from numpy.fft import rfft, rfftfreq
+                spec    = np.abs(rfft(signal_np)) / max(1, len(signal_np))
+                f_axis  = rfftfreq(len(signal_np), d=1.0 / 12800.0)
+                step    = max(1, len(f_axis) // 512)
+                spec_db = 20.0 * np.log10(spec + 1e-10)
+                spec_db = np.nan_to_num(spec_db, nan=-120.0, posinf=0.0, neginf=-120.0)
+                fft_payload = {
+                    "freqs"        : f_axis[::step].round(1).tolist(),
+                    "spectrum_db"  : spec_db[::step].round(2).tolist(),
+                    "resolution_hz": round(float(f_axis[1] - f_axis[0]), 2) if len(f_axis) > 1 else None,
+                }
+            except Exception:
+                fft_payload = None
+
 
             # ── Payload complet vers le frontend ─────────────────────────
             payload = {
@@ -348,6 +366,7 @@ async def websocket_simulation(websocket: WebSocket):
                 "trend"         : update["trend"],
                 "new_alerts"    : update["new_alerts"],
                 "signal"        : signal,
+                "fft"           : fft_payload,
                 "features"      : {k: clean_nan(v) for k, v in features_payload.items()},
                 "progress"      : {
                     "current": state["idx"] + 1,
